@@ -1108,8 +1108,6 @@ async function saveDelivery(reservationId) {
   const dist     = parseFloat(document.getElementById('del-dist').value) || 0;
   const rate     = parseFloat(document.getElementById('del-rate').value) || 0;
   const date     = document.getElementById('del-date').value;
-  // IMPORTANT: Add these if your table requires them
-  const address  = document.getElementById('calc-address').value; 
 
   if (!driverId || !dist) { showToast('Please fill all fields', 'error'); return; }
 
