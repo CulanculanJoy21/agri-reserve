@@ -1418,16 +1418,38 @@ async function loadDriverLocations(activeDeliveries) {
 
   const driverList = document.getElementById('driver-list');
 
-  if (drivers.length === 0) {
+  // 1. Get IDs of drivers who have a delivery "in_transit"
+  const activeDriverIds = activeDeliveries.map(d => parseInt(d.driver_id));
+
+  // 2. Filter the drivers list to ONLY include those active IDs
+  const transitDrivers = drivers.filter(driver => activeDriverIds.includes(driver.id));
+
+  // 3. Handle the "Empty" state for the sidebar
+  if (transitDrivers.length === 0) {
     if (driverList) driverList.innerHTML = `
       <div style="font-size:13px;color:var(--text3);text-align:center;padding:8px">
-        No drivers currently active
+        No drivers currently in transit
       </div>`;
+    
+    // Remove all driver markers from the map since no one is in transit
+    Object.keys(driverMarkers).forEach(id => {
+      trackingMap.removeLayer(driverMarkers[id]);
+      delete driverMarkers[id];
+    });
     return;
   }
 
-  // Update or create driver markers on map
-  drivers.forEach(driver => {
+  // 4. Remove markers for drivers who are NO LONGER in transit
+  // (e.g., they just finished a delivery)
+  Object.keys(driverMarkers).forEach(id => {
+    if (!activeDriverIds.includes(parseInt(id))) {
+      trackingMap.removeLayer(driverMarkers[id]);
+      delete driverMarkers[id];
+    }
+  });
+
+  // 5. Update or create markers ONLY for transit drivers
+  transitDrivers.forEach(driver => {
     const lat = parseFloat(driver.current_lat);
     const lng = parseFloat(driver.current_lng);
 
@@ -1449,34 +1471,31 @@ async function loadDriverLocations(activeDeliveries) {
     });
 
     if (driverMarkers[driver.id]) {
-      // Move existing marker smoothly
       driverMarkers[driver.id].setLatLng([lat, lng]);
     } else {
-      // Create new marker
       driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
         .addTo(trackingMap)
         .bindPopup(`
           <strong>🚗 ${driver.name}</strong><br>
+          <small>Status: In Transit</small><br>
           <small>Last updated: ${new Date(driver.location_updated_at).toLocaleTimeString()}</small>
         `);
     }
   });
 
-  // Update driver list below map
+  // 6. Update the sidebar list to only show these specific drivers
   if (driverList) {
-    driverList.innerHTML = drivers.map(d => `
+    driverList.innerHTML = transitDrivers.map(d => `
       <div style="display:flex;justify-content:space-between;align-items:center;
                   padding:10px 14px;background:var(--bg3);border-radius:10px">
         <div style="display:flex;align-items:center;gap:10px">
           <div class="pulse-dot"></div>
           <div>
             <div style="font-weight:600;color:var(--text1)">${d.name}</div>
-            <div style="font-size:11px;color:var(--text3)">
-              Updated: ${new Date(d.location_updated_at).toLocaleTimeString()}
-            </div>
+            <div style="font-size:11px;color:var(--text3)">In Transit</div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm"
+        <button class="btn btn-ghost btn-sm" 
           onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">
           📍 Focus
         </button>
