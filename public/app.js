@@ -659,7 +659,7 @@ pages.reservations = async function (filterStatus = 'all') {
                   ` : ''}
  
                   <!-- ASSIGNED — driver already assigned -->
-                  ${r.status === 'assigned' ? `
+                  ${r.status === 'assigned'|| r.status === 'approved' ? `
                     <span class="badge badge-blue" style="padding:6px 12px">
                       ✓ Driver Assigned
                     </span>
@@ -1454,10 +1454,18 @@ async function loadDriverLocations(activeDeliveries) {
         }
     });
 
-    // 6. Loop and Update
-    transitDrivers.forEach(driver => {
-        const lat = parseFloat(driver.current_lat);
-        const lng = parseFloat(driver.current_lng);
+    // 6. Loop through transit drivers and update/create markers
+    transitDrivers.forEach((driver, index) => { // 🟢 Added 'index' here
+        let lat = parseFloat(driver.current_lat);
+        let lng = parseFloat(driver.current_lng);
+
+        if (!lat || !lng) return;
+
+        // 💡 ADD THIS: Jitter logic to separate markers at the same spot
+        if (transitDrivers.length > 1) {
+            lat += (index * 0.0001); 
+            lng += (index * 0.0001);
+        }
 
         const lastSeen = driver.location_updated_at 
             ? new Date(driver.location_updated_at).toLocaleTimeString() 
@@ -1477,6 +1485,24 @@ async function loadDriverLocations(activeDeliveries) {
             iconSize: [16, 16],
             className: ''
         });
+
+        const popupContent = `
+            <div style="padding:5px">
+                <strong style="color:#2dd4bf">🚗 ${driver.name}</strong><br>
+                <span style="font-size:12px;color:#64748b">Status: In Transit</span><br>
+                <span style="font-size:11px;color:#94a3b8">Last seen: ${lastSeen}</span>
+            </div>
+        `;
+
+          if (driverMarkers[driver.id]) {
+              driverMarkers[driver.id].setLatLng([lat, lng]);
+              driverMarkers[driver.id].getPopup().setContent(popupContent);
+          } else {
+              driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
+                  .addTo(trackingMap)
+                  .bindPopup(popupContent);
+          }
+      });
 
         const popupContent = `
             <div style="padding:5px">
