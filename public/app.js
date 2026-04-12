@@ -2216,6 +2216,20 @@ async function showLogout() {
     showToast('Logged out successfully', 'info');
   }
 }
+// Start this when the admin opens the tracking tab
+function startLiveTracking() {
+    // Check for movement every 5 seconds
+    setInterval(async () => {
+        // 1. Get the list of deliveries that are 'in_transit'
+        const activeDeliveries = await API.get('/deliveries/active'); 
+        
+        if (activeDeliveries) {
+            // 2. Refresh the map markers using the function we fixed earlier
+            // This moves the marker to the new current_lat/lng in the DB
+            loadDriverLocations(activeDeliveries);
+        }
+    }, 5000); 
+}
 
 // ==================== INIT ====================
 const savedToken = localStorage.getItem('auth_token');

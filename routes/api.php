@@ -81,13 +81,17 @@ Route::get('/equipment/{id}', [EquipmentController::class, 'show']);
 
 // ── PROTECTED ROUTES (login required) ────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
-
-    // Driver location tracking
-    Route::put('/drivers/{id}/location', [UserController::class, 'updateLocation']);
-    Route::get('/drivers/locations',     [UserController::class, 'allDriverLocations']);
+    
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
+
+    // Driver location tracking (CLEANED UP)
+    // The mobile phone calls this to SAVE location
+    Route::post('/driver/update-location', [UserController::class, 'updateLocation']);
+    
+    // The dashboard calls this to SHOW markers
+    Route::get('/drivers/locations',       [UserController::class, 'allDriverLocations']);
 
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {

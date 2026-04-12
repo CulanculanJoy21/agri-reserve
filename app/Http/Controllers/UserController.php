@@ -66,35 +66,32 @@ class UserController extends Controller
     );
 }
     // Driver updates their own location
-    public function updateLocation(Request $request, $id)
+   // Method 1: Saves the phone's GPS to the DB
+    public function updateLocation(Request $request)
     {
         $request->validate([
             'latitude'  => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);
 
-        $user = \App\Models\User::findOrFail($id);
-        $user->update([
-            'current_lat'        => $request->latitude,
-            'current_lng'        => $request->longitude,
-            'location_updated_at'=> now(),
+        $request->user()->update([
+            'current_lat'         => $request->latitude,
+            'current_lng'         => $request->longitude,
+            'location_updated_at' => now(),
         ]);
 
-        return response()->json(['message' => 'Location updated']);
+        return response()->json(['status' => 'success']);
     }
 
-    // Admin gets all active driver locations
+    // Method 2: Sends all active drivers to the Map
     public function allDriverLocations()
     {
-        $drivers = \App\Models\User::where('role', 'driver')
-            ->whereNotNull('current_lat')
-            ->whereNotNull('current_lng')
-            // Only drivers who updated location in last 2 minutes
-            ->where('location_updated_at', '>=', now()->subMinutes(30))
-            ->get(['id', 'name', 'current_lat', 'current_lng',
-                'location_updated_at']);
-
-        return response()->json($drivers);
+        return response()->json(
+            User::where('role', 'driver')
+                ->whereNotNull('current_lat')
+                ->where('location_updated_at', '>=', now()->subMinutes(30))
+                ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
+        );
     }
 
     public function update(Request $request, $id)
