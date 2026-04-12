@@ -1408,10 +1408,6 @@ function initTrackingMap(activeDeliveries) {
     }
   });
 }
-
-// 1. Container to store markers so they don't duplicate
-let driverMarkers = {};
-
 async function loadDriverLocations(activeDeliveries) {
     const drivers = await API.get('/drivers/locations');
     if (!drivers) return;
