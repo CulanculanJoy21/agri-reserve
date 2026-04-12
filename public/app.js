@@ -5,7 +5,7 @@
 
 // ==================== API CONFIG ====================
 const API = {
-  BASE_URL: 'http://127.0.0.1:8000/api',
+  BASE_URL: 'https://agri-reserve-main-cmvorm.free.laravel.cloud/api',
   TOKEN: localStorage.getItem('auth_token') || null,
 
   headers() {
