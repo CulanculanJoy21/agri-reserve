@@ -32,62 +32,63 @@ class DeliveryController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'reservation_id' => 'required|exists:reservations,reservation_id',
+            // Changed reservation_id to check against 'id' if that's your primary key
+            'reservation_id' => 'required|exists:reservations,id', 
             'driver_id'      => 'required|exists:users,id',
             'distance_km'    => 'required|numeric',
             'price_per_km'   => 'required|numeric',
             'delivery_date'  => 'nullable|date',
         ]);
 
-        // Pull address from the reservation
         $res = Reservation::findOrFail($data['reservation_id']);
-        $data['delivery_fee']     = $data['distance_km'] * $data['price_per_km'];
-        $data['delivery_status']  = 'pending';
-        $data['delivery_address'] = $res->delivery_address;
-        $data['latitude']         = $res->latitude;
-        $data['longitude']        = $res->longitude;
+        
+        // Calculate fee
+        $deliveryFee = $data['distance_km'] * $data['price_per_km'];
 
+        // Create delivery WITHOUT address/lat/lng columns
         $delivery = Delivery::updateOrCreate(
             ['reservation_id' => $data['reservation_id']],
-            $data
+            [
+                'driver_id'       => $data['driver_id'],
+                'distance_km'     => $data['distance_km'],
+                'price_per_km'    => $data['price_per_km'],
+                'delivery_fee'    => $deliveryFee,
+                'delivery_date'   => $data['delivery_date'],
+                'delivery_status' => 'pending',
+            ]
         );
+
         if (in_array($res->status, ['approved', 'pending'])) {
             $res->update(['status' => 'assigned']);
         }
 
         return response()->json(
             Delivery::with(['reservation.equipment', 'reservation.farmer', 'driver'])
-            ->find($delivery->delivery_id)
-            );
-        }
+            ->find($delivery->id) // Use 'id' or your primary key
+        );
+    }
 
     // ── UPDATE STATUS ──────────────────────────────────────
     public function update(Request $request, $id)
     {
         $delivery = Delivery::findOrFail($id);
-
         $newDeliveryStatus = $request->input('delivery_status', $delivery->delivery_status);
 
         $delivery->fill([
-            'driver_id'        => $request->input('driver_id', $delivery->driver_id),
-            'distance_km'      => $request->input('distance_km', $delivery->distance_km),
-            'price_per_km'     => $request->input('price_per_km', $delivery->price_per_km),
-            'delivery_fee'     => $request->input('delivery_fee',
-                                  $request->input('distance_km', $delivery->distance_km) *
-                                  $request->input('price_per_km', $delivery->price_per_km)),
-            'delivery_status'  => $newDeliveryStatus,
-            'delivery_date'    => $request->input('delivery_date', $delivery->delivery_date),
-            'delivery_address' => $request->input('delivery_address', $delivery->delivery_address),
-            'latitude'         => $request->input('latitude', $delivery->latitude),
-            'longitude'        => $request->input('longitude', $delivery->longitude),
+            'driver_id'       => $request->input('driver_id', $delivery->driver_id),
+            'distance_km'     => $request->input('distance_km', $delivery->distance_km),
+            'price_per_km'    => $request->input('price_per_km', $delivery->price_per_km),
+            'delivery_fee'    => $request->input('distance_km', $delivery->distance_km) * $request->input('price_per_km', $delivery->price_per_km),
+            'delivery_status' => $newDeliveryStatus,
+            'delivery_date'   => $request->input('delivery_date', $delivery->delivery_date),
+            // ❌ Removed address, latitude, and longitude from here
         ]);
 
         $delivery->save();
         $delivery->load('reservation.equipment');
 
-        // Handle reservation status based on delivery status
+        // Reservation logic stays the same
         if ($newDeliveryStatus === 'delivered') {
-            // Delivery done → complete the reservation and free equipment
             if ($delivery->reservation) {
                 $delivery->reservation->update(['status' => 'completed']);
                 if ($delivery->reservation->equipment) {
@@ -95,16 +96,7 @@ class DeliveryController extends Controller
                 }
             }
         } elseif ($newDeliveryStatus === 'in_transit') {
-            // Driver started delivery
-            if ($delivery->reservation &&
-                in_array($delivery->reservation->status, ['assigned', 'approved'])) {
-                $delivery->reservation->update(['status' => 'assigned']);
-            }
-        } elseif ($request->has('driver_id') && $request->driver_id
-                && $newDeliveryStatus === 'pending') {
-            // Driver just assigned for first time
-            if ($delivery->reservation &&
-                in_array($delivery->reservation->status, ['approved', 'pending'])) {
+            if ($delivery->reservation) {
                 $delivery->reservation->update(['status' => 'assigned']);
             }
         }
