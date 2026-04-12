@@ -12,13 +12,26 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
+        $table->id();
+        $table->string('name');
+        $table->string('email')->unique();
+        $table->timestamp('email_verified_at')->nullable();
+        $table->string('password');
+        
+        // ── ADD THESE COLUMNS ──
+        $table->enum('role', ['admin', 'farmer', 'driver'])->default('farmer');
+        $table->string('phone')->nullable();
+        $table->text('address')->nullable();
+        $table->boolean('is_active')->default(true);
+        
+        // Tracking columns for the map
+        $table->decimal('current_lat', 10, 8)->nullable();
+        $table->decimal('current_lng', 11, 8)->nullable();
+        $table->timestamp('location_updated_at')->nullable();
+        // ───────────────────────
+
+        $table->rememberToken();
+        $table->timestamps();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
