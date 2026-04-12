@@ -17,6 +17,8 @@ class Reservation extends Model
     protected $casts = [
         'latitude'  => 'float',
         'longitude' => 'float',
+        'start_date' => 'date',
+        'end_date'   => 'date',
     ];
 
     public function farmer()   { return $this->belongsTo(User::class, 'user_id'); }
