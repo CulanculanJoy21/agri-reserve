@@ -1117,7 +1117,6 @@ async function saveDelivery(reservationId) {
     distance_km: dist, 
     price_per_km: rate, 
     delivery_date: date,
-    delivery_address: address, // Send the address string
     delivery_status: 'pending' // Always good to set a default
   });
 
