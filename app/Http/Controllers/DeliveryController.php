@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Delivery;
 use App\Models\Reservation;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class DeliveryController extends Controller

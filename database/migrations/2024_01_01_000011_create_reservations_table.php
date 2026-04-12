@@ -14,12 +14,15 @@ return new class extends Migration {
             $table->date('start_date');
             $table->date('end_date');
             $table->enum('reservation_type', ['pickup', 'delivery'])->default('pickup');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'completed'])->default('pending');
+            $table->enum('status', ['pending', 'approved', 'rejected', 'assigned', 'completed'])->default('pending');
             $table->text('notes')->nullable();
+            $table->string('delivery_address')->nullable();
+            $table->decimal('latitude', 10, 8)->nullable();
+            $table->decimal('longitude', 11, 8)->nullable();
             $table->timestamps();
 
-           $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-$table->foreign('equipment_id')->references('equipment_id')->on('equipment')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('equipment_id')->references('equipment_id')->on('equipment')->onDelete('cascade');
         });
     }
 
