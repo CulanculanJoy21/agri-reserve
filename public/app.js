@@ -2142,7 +2142,7 @@ async function doLogin() {
     document.getElementById('login-error').textContent = 'Please enter email and password';
     return;
   }
-  const res  = await fetch('http://127.0.0.1:8000/api/auth/login', {
+  const res = await fetch(`${API.BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
