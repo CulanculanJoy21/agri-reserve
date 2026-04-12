@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void
-    {
+{
         Schema::create('deliveries', function (Blueprint $table) {
             $table->id('delivery_id');
             $table->unsignedBigInteger('reservation_id');
@@ -16,8 +16,12 @@ return new class extends Migration {
             $table->decimal('delivery_fee', 10, 2)->default(0);
             $table->enum('delivery_status', ['pending', 'in_transit', 'delivered'])->default('pending');
             $table->date('delivery_date')->nullable();
-            $table->string('farm_lat', 50)->nullable();
-            $table->string('farm_lng', 50)->nullable();
+            
+            // 📍 PUTTING THESE BACK IN THE TABLE
+            $table->text('delivery_address')->nullable();
+            $table->string('latitude', 50)->nullable();
+            $table->string('longitude', 50)->nullable();
+            
             $table->text('delivery_notes')->nullable();
             $table->timestamps();
 

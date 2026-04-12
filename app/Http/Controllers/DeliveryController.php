@@ -32,7 +32,6 @@ class DeliveryController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            // Changed reservation_id to check against 'id' if that's your primary key
             'reservation_id' => 'required|exists:reservations,reservation_id', 
             'driver_id'      => 'required|exists:users,id',
             'distance_km'    => 'required|numeric',
@@ -40,21 +39,24 @@ class DeliveryController extends Controller
             'delivery_date'  => 'nullable|date',
         ]);
 
+        // 1. Find the reservation to get its address
         $res = Reservation::where('reservation_id', $data['reservation_id'])->firstOrFail();
         
-        // Calculate fee
         $deliveryFee = $data['distance_km'] * $data['price_per_km'];
 
-        // Create delivery WITHOUT address/lat/lng columns
+        // 2. Save the delivery AND the address info
         $delivery = Delivery::updateOrCreate(
             ['reservation_id' => $data['reservation_id']],
             [
-                'driver_id'       => $data['driver_id'],
-                'distance_km'     => $data['distance_km'],
-                'price_per_km'    => $data['price_per_km'],
-                'delivery_fee'    => $deliveryFee,
-                'delivery_date'   => $data['delivery_date'],
-                'delivery_status' => 'pending',
+                'driver_id'        => $data['driver_id'],
+                'distance_km'      => $data['distance_km'],
+                'price_per_km'     => $data['price_per_km'],
+                'delivery_fee'     => $deliveryFee,
+                'delivery_date'    => $data['delivery_date'],
+                'delivery_status'  => 'pending',
+                'delivery_address' => $res->delivery_address, 
+                'latitude'         => $res->latitude,        
+                'longitude'        => $res->longitude,        
             ]
         );
 
@@ -64,7 +66,7 @@ class DeliveryController extends Controller
 
         return response()->json(
             Delivery::with(['reservation.equipment', 'reservation.farmer', 'driver'])
-            ->find($delivery->id) // Use 'id' or your primary key
+            ->find($delivery->delivery_id)
         );
     }
 

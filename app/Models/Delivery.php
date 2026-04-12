@@ -10,9 +10,17 @@ class Delivery extends Model
     public $incrementing = true;
 
     protected $fillable = [
-    'reservation_id', 'driver_id', 'distance_km', 'price_per_km',
-    'delivery_fee', 'delivery_status', 'delivery_date',
-    'delivery_address', 'latitude', 'longitude'
+    'reservation_id', 
+    'driver_id', 
+    'distance_km', 
+    'price_per_km',
+    'delivery_fee', 
+    'delivery_status', 
+    'delivery_date',
+    'delivery_address', 
+    'latitude',         
+    'longitude',        
+    'delivery_notes'
     ];
 
     protected $casts = [
