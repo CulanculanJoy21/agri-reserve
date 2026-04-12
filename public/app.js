@@ -1409,27 +1409,36 @@ function initTrackingMap(activeDeliveries) {
   });
 }
 async function loadDriverLocations(activeDeliveries) {
+    // 1. Fetch fresh coordinates from the backend
     const drivers = await API.get('/drivers/locations');
-    if (!drivers) return;
+    
+    // DEBUG: Check these in your F12 Console
+    console.log("Deliveries In Transit:", activeDeliveries);
+    console.log("Drivers with GPS in DB:", drivers);
+
+    if (!drivers || !Array.isArray(drivers)) return;
 
     const driverList = document.getElementById('driver-list');
 
-    // 2. Identify which drivers have an "in_transit" delivery
-    const activeDriverIds = activeDeliveries.map(d => parseInt(d.driver_id));
+    // 2. Identify IDs (using String to avoid type mismatch issues)
+    const activeDriverIds = activeDeliveries.map(d => String(d.driver_id));
 
-    // 3. Filter the global drivers list to only those in transit
-    const transitDrivers = drivers.filter(driver => activeDriverIds.includes(driver.id));
+    // 3. Filter drivers who are in transit AND have coordinates
+    const transitDrivers = drivers.filter(driver => {
+        const isAssigned = activeDriverIds.includes(String(driver.id));
+        const hasCoords = driver.current_lat && driver.current_lng;
+        return isAssigned && hasCoords;
+    });
 
-    // 4. Handle "No Drivers" state
+    // 4. Handle Empty State
     if (transitDrivers.length === 0) {
         if (driverList) {
             driverList.innerHTML = `
                 <div style="font-size:13px;color:var(--text3);text-align:center;padding:15px">
-                    No drivers currently in transit
+                    No drivers currently in transit or missing GPS data
                 </div>`;
         }
         
-        // Remove all markers from map
         Object.keys(driverMarkers).forEach(id => {
             trackingMap.removeLayer(driverMarkers[id]);
             delete driverMarkers[id];
@@ -1437,22 +1446,19 @@ async function loadDriverLocations(activeDeliveries) {
         return;
     }
 
-    // 5. Cleanup: Remove markers for drivers who are no longer in transit
+    // 5. Cleanup stale markers
     Object.keys(driverMarkers).forEach(id => {
-        if (!activeDriverIds.includes(parseInt(id))) {
+        if (!activeDriverIds.includes(String(id))) {
             trackingMap.removeLayer(driverMarkers[id]);
             delete driverMarkers[id];
         }
     });
 
-    // 6. Loop through transit drivers and update/create markers
+    // 6. Loop and Update
     transitDrivers.forEach(driver => {
         const lat = parseFloat(driver.current_lat);
         const lng = parseFloat(driver.current_lng);
 
-        if (!lat || !lng) return;
-
-        // Safety check for the timestamp
         const lastSeen = driver.location_updated_at 
             ? new Date(driver.location_updated_at).toLocaleTimeString() 
             : 'Just now';
@@ -1481,18 +1487,16 @@ async function loadDriverLocations(activeDeliveries) {
         `;
 
         if (driverMarkers[driver.id]) {
-            // Move existing marker
             driverMarkers[driver.id].setLatLng([lat, lng]);
             driverMarkers[driver.id].getPopup().setContent(popupContent);
         } else {
-            // Create new marker
             driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
                 .addTo(trackingMap)
                 .bindPopup(popupContent);
         }
     });
 
-    // 7. Update the Sidebar List
+    // 7. Render Sidebar
     if (driverList) {
         driverList.innerHTML = transitDrivers.map(d => `
             <div style="display:flex;justify-content:space-between;align-items:center;
@@ -1501,7 +1505,7 @@ async function loadDriverLocations(activeDeliveries) {
                     <div style="width:8px;height:8px;background:#4ade80;border-radius:50%;box-shadow:0 0 8px #4ade80"></div>
                     <div>
                         <div style="font-weight:600;color:#f8fafc;font-size:14px">${d.name}</div>
-                        <div style="font-size:11px;color:#94a3b8">Active Delivery</div>
+                        <div style="font-size:11px;color:#94a3b8">In Transit</div>
                     </div>
                 </div>
                 <button class="btn btn-sm" style="background:#334155;border:none;color:white;padding:4px 8px"
@@ -1512,15 +1516,6 @@ async function loadDriverLocations(activeDeliveries) {
         `).join('');
     }
 }
-
-// 8. The Focus Function (Fly-to effect)
-window.centerOnDriver = function(lat, lng, name) {
-    if (!lat || !lng) return;
-    trackingMap.flyTo([lat, lng], 16, {
-        animate: true,
-        duration: 1.5
-    });
-};
 
 async function refreshDriverLocations() {
   const deliveries = await API.get('/deliveries') || [];
