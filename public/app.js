@@ -1487,12 +1487,14 @@ async function loadDriverLocations(activeDeliveries) {
         `;
 
         if (driverMarkers[driver.id]) {
-            driverMarkers[driver.id].setLatLng([lat, lng]);
-            driverMarkers[driver.id].getPopup().setContent(popupContent);
+        // Move existing marker
+        driverMarkers[driver.id].setLatLng([lat, lng]);
+        driverMarkers[driver.id].getPopup().setContent(popupContent);
         } else {
+            // Create new marker
             driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
-                .addTo(trackingMap)
-                .bindPopup(popupContent);
+            .addTo(trackingMap)
+            .bindPopup(popupContent);
         }
     });
 
@@ -2239,7 +2241,22 @@ function startLiveTracking() {
         }
     }, 5000); 
 }
-
+// Change this at the bottom of your file
+window.centerOnDriver = function(lat, lng, name) {
+    if (!lat || !lng) {
+        showToast(`No GPS coordinates for ${name}`, 'error');
+        return;
+    }
+    
+    // Smoothly fly the camera to the driver
+    if (trackingMap) {
+        trackingMap.flyTo([lat, lng], 16, {
+            animate: true,
+            duration: 1.5
+        });
+        showToast(`Focusing on ${name}`, 'info');
+    }
+};
 // ==================== INIT ====================
 const savedToken = localStorage.getItem('auth_token');
 if (savedToken) {
