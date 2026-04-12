@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Delivery extends Model
 {
     protected $primaryKey = 'delivery_id';
+    public $incrementing = true;
 
     protected $fillable = [
     'reservation_id', 'driver_id', 'distance_km', 'price_per_km',

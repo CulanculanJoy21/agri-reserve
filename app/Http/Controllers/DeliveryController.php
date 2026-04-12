@@ -33,14 +33,14 @@ class DeliveryController extends Controller
     {
         $data = $request->validate([
             // Changed reservation_id to check against 'id' if that's your primary key
-            'reservation_id' => 'required|exists:reservations,id', 
+            'reservation_id' => 'required|exists:reservations,reservation_id', 
             'driver_id'      => 'required|exists:users,id',
             'distance_km'    => 'required|numeric',
             'price_per_km'   => 'required|numeric',
             'delivery_date'  => 'nullable|date',
         ]);
 
-        $res = Reservation::findOrFail($data['reservation_id']);
+        $res = Reservation::where('reservation_id', $data['reservation_id'])->firstOrFail();
         
         // Calculate fee
         $deliveryFee = $data['distance_km'] * $data['price_per_km'];
@@ -103,7 +103,7 @@ class DeliveryController extends Controller
 
         return response()->json(
             Delivery::with(['reservation.equipment', 'reservation.farmer', 'driver'])
-                ->find($id)
+            ->find($delivery->delivery_id) // Match your migration's column name
         );
     }
 
