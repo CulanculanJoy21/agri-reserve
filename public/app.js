@@ -1454,7 +1454,7 @@ async function loadDriverLocations(activeDeliveries) {
         }
     });
 
-    // 6. Loop through transit drivers and update/create markers
+    // 6. Loop and Update
     transitDrivers.forEach((driver, index) => { // 🟢 Added 'index' here
         let lat = parseFloat(driver.current_lat);
         let lng = parseFloat(driver.current_lng);
@@ -1494,33 +1494,13 @@ async function loadDriverLocations(activeDeliveries) {
             </div>
         `;
 
-          if (driverMarkers[driver.id]) {
-              driverMarkers[driver.id].setLatLng([lat, lng]);
-              driverMarkers[driver.id].getPopup().setContent(popupContent);
-          } else {
-              driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
-                  .addTo(trackingMap)
-                  .bindPopup(popupContent);
-          }
-      });
-
-        const popupContent = `
-            <div style="padding:5px">
-                <strong style="color:#2dd4bf">🚗 ${driver.name}</strong><br>
-                <span style="font-size:12px;color:#64748b">Status: In Transit</span><br>
-                <span style="font-size:11px;color:#94a3b8">Last seen: ${lastSeen}</span>
-            </div>
-        `;
-
         if (driverMarkers[driver.id]) {
-        // Move existing marker
-        driverMarkers[driver.id].setLatLng([lat, lng]);
-        driverMarkers[driver.id].getPopup().setContent(popupContent);
+            driverMarkers[driver.id].setLatLng([lat, lng]);
+            driverMarkers[driver.id].getPopup().setContent(popupContent);
         } else {
-            // Create new marker
             driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
-            .addTo(trackingMap)
-            .bindPopup(popupContent);
+                .addTo(trackingMap)
+                .bindPopup(popupContent);
         }
     });
 
