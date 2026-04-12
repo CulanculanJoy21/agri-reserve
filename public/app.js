@@ -1418,33 +1418,41 @@ async function loadDriverLocations(activeDeliveries) {
 
   const driverList = document.getElementById('driver-list');
 
-  // 1. Get IDs of drivers who actually have an 'in_transit' delivery
-  const transitDriverIds = activeDeliveries.map(d => parseInt(d.driver_id));
+  // 1. Get IDs of drivers who have a delivery "in_transit"
+  const activeDriverIds = activeDeliveries.map(d => parseInt(d.driver_id));
 
-  // 2. Filter: Only keep drivers who are in that ID list
-  const activeDrivers = drivers.filter(driver => transitDriverIds.includes(driver.id));
+  // 2. Filter the drivers list to ONLY include those active IDs
+  const transitDrivers = drivers.filter(driver => activeDriverIds.includes(driver.id));
 
-  // 3. CLEANUP: Remove any markers from the map that are NOT in our active list
+  // 3. Handle the "Empty" state for the sidebar
+  if (transitDrivers.length === 0) {
+    if (driverList) driverList.innerHTML = `
+      <div style="font-size:13px;color:var(--text3);text-align:center;padding:8px">
+        No drivers currently in transit
+      </div>`;
+    
+    // Remove all driver markers from the map since no one is in transit
+    Object.keys(driverMarkers).forEach(id => {
+      trackingMap.removeLayer(driverMarkers[id]);
+      delete driverMarkers[id];
+    });
+    return;
+  }
+
+  // 4. Remove markers for drivers who are NO LONGER in transit
+  // (e.g., they just finished a delivery)
   Object.keys(driverMarkers).forEach(id => {
-    if (!transitDriverIds.includes(parseInt(id))) {
+    if (!activeDriverIds.includes(parseInt(id))) {
       trackingMap.removeLayer(driverMarkers[id]);
       delete driverMarkers[id];
     }
   });
 
-  // 4. Handle "No Drivers" view
-  if (activeDrivers.length === 0) {
-    if (driverList) driverList.innerHTML = `
-      <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
-        No drivers currently in transit
-      </div>`;
-    return;
-  }
-
-  // 5. Update or create markers for ACTIVE drivers ONLY
-  activeDrivers.forEach(driver => {
+  // 5. Update or create markers ONLY for transit drivers
+  transitDrivers.forEach(driver => {
     const lat = parseFloat(driver.current_lat);
     const lng = parseFloat(driver.current_lng);
+
     if (!lat || !lng) return;
 
     const driverIcon = L.divIcon({
@@ -1467,15 +1475,19 @@ async function loadDriverLocations(activeDeliveries) {
     } else {
       driverMarkers[driver.id] = L.marker([lat, lng], { icon: driverIcon })
         .addTo(trackingMap)
-        .bindPopup(`<strong>🚗 ${driver.name}</strong><br>Status: In Transit`);
+        .bindPopup(`
+          <strong>🚗 ${driver.name}</strong><br>
+          <small>Status: In Transit</small><br>
+          <small>Last updated: ${new Date(driver.location_updated_at).toLocaleTimeString()}</small>
+        `);
     }
   });
 
-  // 6. Update side list to only show active drivers
+  // 6. Update the sidebar list to only show these specific drivers
   if (driverList) {
-    driverList.innerHTML = activeDrivers.map(d => `
+    driverList.innerHTML = transitDrivers.map(d => `
       <div style="display:flex;justify-content:space-between;align-items:center;
-                  padding:10px 14px;background:var(--bg3);border-radius:10px;margin-bottom:8px">
+                  padding:10px 14px;background:var(--bg3);border-radius:10px">
         <div style="display:flex;align-items:center;gap:10px">
           <div class="pulse-dot"></div>
           <div>
