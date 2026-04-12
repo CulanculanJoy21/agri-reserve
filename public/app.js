@@ -1108,19 +1108,19 @@ async function saveDelivery(reservationId) {
   const dist     = parseFloat(document.getElementById('del-dist').value) || 0;
   const rate     = parseFloat(document.getElementById('del-rate').value) || 0;
   const date     = document.getElementById('del-date').value;
-  // IMPORTANT: Add these if your table requires them
-  const address  = document.getElementById('calc-address').value; 
 
-  if (!driverId || !dist) { showToast('Please fill all fields', 'error'); return; }
+  if (!driverId || !dist) { 
+    showToast('Please fill all fields', 'error'); 
+    return; 
+  }
 
   const result = await API.post('/deliveries', {
     reservation_id: reservationId, 
     driver_id: driverId,
     distance_km: dist, 
     price_per_km: rate, 
-    delivery_date: date,
-    delivery_address: address, // Send the address string
-    delivery_status: 'pending' // Always good to set a default
+    delivery_date: date
+    // No need to send address here; the PHP controller handles it!
   });
 
   if (result) { 
@@ -1128,7 +1128,7 @@ async function saveDelivery(reservationId) {
     showToast('Delivery assigned!'); 
     pages.reservations(); 
   } else {
-    showToast('Failed to assign delivery. Check server logs.', 'error');
+    showToast('Failed to assign delivery', 'error');
   }
 }
 
