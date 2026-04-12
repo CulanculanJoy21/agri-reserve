@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Reservation extends Model
+{
+    protected $primaryKey = 'reservation_id';
+
+    protected $fillable = [
+    'user_id', 'equipment_id', 'start_date', 'end_date',
+    'reservation_type', 'status', 'notes',
+    'delivery_address', 'latitude', 'longitude'
+    ];
+
+    protected $casts = [
+        'latitude'  => 'float',
+        'longitude' => 'float',
+    ];
+
+    public function farmer()   { return $this->belongsTo(User::class, 'user_id'); }
+    public function equipment(){ return $this->belongsTo(Equipment::class, 'equipment_id', 'equipment_id'); }
+    public function delivery() { return $this->hasOne(Delivery::class, 'reservation_id', 'reservation_id'); }
+    public function feedback() { return $this->hasOne(Feedback::class, 'reservation_id', 'reservation_id'); }
+
+    public function getRentalCostAttribute(): float
+    {
+        $days = max(1, $this->start_date->diffInDays($this->end_date));
+        return $days * ($this->equipment->rental_price ?? 0);
+    }
+}
