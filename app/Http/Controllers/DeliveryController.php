@@ -72,8 +72,8 @@ class DeliveryController extends Controller
             'distance_km'      => $request->input('distance_km', $delivery->distance_km),
             'price_per_km'     => $request->input('price_per_km', $delivery->price_per_km),
             'delivery_fee'     => $request->input('delivery_fee',
-                                    $request->input('distance_km', $delivery->distance_km) *
-                                    $request->input('price_per_km', $delivery->price_per_km)),
+                                  $request->input('distance_km', $delivery->distance_km) *
+                                  $request->input('price_per_km', $delivery->price_per_km)),
             'delivery_status'  => $newDeliveryStatus,
             'delivery_date'    => $request->input('delivery_date', $delivery->delivery_date),
             'delivery_address' => $request->input('delivery_address', $delivery->delivery_address),

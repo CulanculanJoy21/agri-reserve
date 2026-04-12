@@ -12,14 +12,3 @@ class Authenticate extends Middleware
         return null;
     }
 }
-```
-
-**5.** Save **(Ctrl+S)**
-
-**6.** Also copy your `RoleMiddleware.php` file into this same `Middleware` folder
-
----
-
-Then refresh your browser at:
-```
-http://127.0.0.1:8000/api/equipment
