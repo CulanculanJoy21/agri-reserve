@@ -659,7 +659,7 @@ pages.reservations = async function (filterStatus = 'all') {
                   ` : ''}
  
                   <!-- ASSIGNED — driver already assigned -->
-                  ${r.status === 'assigned'|| r.status === 'approved' ? `
+                  ${r.status === 'assigned' ? `
                     <span class="badge badge-blue" style="padding:6px 12px">
                       ✓ Driver Assigned
                     </span>
