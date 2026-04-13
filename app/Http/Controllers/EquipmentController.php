@@ -10,9 +10,22 @@ class EquipmentController extends Controller
     public function index(Request $request)
     {
         $query = Equipment::with(['lastMaintenance']);
-        if ($request->status)   $query->where('status', $request->status);
+
+        // 1. If a specific status is requested (like from Admin panel), use it
+        if ($request->status) {
+            $query->where('status', $request->status);
+        } 
+        // 2. Default behavior for the Mobile App / Farmers: Show ONLY available
+        else if ($request->user() && $request->user()->role === 'farmer') {
+            $query->where('status', 'available');
+        }
+
         if ($request->category) $query->where('category', $request->category);
-        if ($request->search)   $query->where('equipment_name', 'like', "%{$request->search}%");
+        
+        if ($request->search) {
+            $query->where('equipment_name', 'like', "%{$request->search}%");
+        }
+
         return response()->json($query->latest()->get());
     }
 
