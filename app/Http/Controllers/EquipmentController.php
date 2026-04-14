@@ -39,29 +39,42 @@ class EquipmentController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'equipment_name' => 'required|string|max:100',
-            'category'       => 'required|string|max:100',
-            'description'    => 'nullable|string',
-            'rental_price'   => 'required|numeric|min:0',
-            'status'         => 'in:available,reserved,maintenance',
-            'location'       => 'nullable|string|max:255',
-            'image'          => 'nullable|string',
+            'equipment_name'     => 'required|string|max:100',
+            'category'           => 'required|string|max:100',
+            'description'        => 'nullable|string',
+            'rental_price'       => 'required|numeric|min:0',
+            'status'             => 'in:available,reserved,maintenance',
+            'location'           => 'nullable|string|max:255',
+            'image'              => 'nullable|string',
+            'quantity'           => 'nullable|integer|min:1',           // 🟢 ADDED
+            'available_quantity' => 'nullable|integer|min:0',           // 🟢 ADDED
         ]);
+        
+        // If not provided, default to 1
+        $data['quantity'] = $data['quantity'] ?? 1;
+        $data['available_quantity'] = $data['available_quantity'] ?? $data['quantity'];
+
         return response()->json(Equipment::create($data), 201);
     }
 
     public function update(Request $request, $id)
     {
         $equip = Equipment::findOrFail($id);
-        $equip->update($request->validate([
-            'equipment_name' => 'sometimes|string|max:100',
-            'category'       => 'sometimes|string|max:100',
-            'description'    => 'nullable|string',
-            'rental_price'   => 'sometimes|numeric|min:0',
-            'status'         => 'sometimes|in:available,reserved,maintenance',
-            'location'       => 'nullable|string|max:255',
-            'image'          => 'nullable|string',
-        ]));
+        
+        $validatedData = $request->validate([
+            'equipment_name'     => 'sometimes|string|max:100',
+            'category'           => 'sometimes|string|max:100',
+            'description'        => 'nullable|string',
+            'rental_price'       => 'sometimes|numeric|min:0',
+            'status'             => 'sometimes|in:available,reserved,maintenance',
+            'location'           => 'nullable|string|max:255',
+            'image'              => 'nullable|string',
+            'quantity'           => 'sometimes|integer|min:1',           // 🟢 ADDED
+            'available_quantity' => 'sometimes|integer|min:0',           // 🟢 ADDED
+        ]);
+
+        $equip->update($validatedData);
+        
         return response()->json($equip);
     }
 

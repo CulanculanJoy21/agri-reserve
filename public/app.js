@@ -588,6 +588,13 @@ function showEquipMaintenance(equipId) {
     </div>
   `);
 }
+const qty = parseInt(document.getElementById('eq-qty').value);
+const avail = parseInt(document.getElementById('eq-avail').value);
+
+if (avail > qty) {
+    showToast('Available units cannot exceed total stock!', 'error');
+    return;
+}
 
 async function saveEquipMaintenance(equipId) {
   const result = await API.post('/maintenance', {
