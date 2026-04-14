@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 
 class ReservationController extends Controller
 {
+    // --- GET ALL RESERVATIONS ---
     public function index(Request $request)
     {
         $user  = $request->user();
@@ -27,16 +28,10 @@ class ReservationController extends Controller
         return response()->json($query->latest()->get());
     }
 
-    public function show($id)
-    {
-        $res = Reservation::with(['farmer', 'equipment', 'delivery.driver', 'feedback'])
-            ->findOrFail($id);
-        return response()->json($res);
-    }
-
+    // --- CREATE RESERVATION (The Fix is Here) ---
     public function store(Request $request)
     {
-        // 1. Validate: Look for 'reserved_quantity' (matching your SerializedName in Android)
+        // 1. Validate: Use the exact key Android is sending
         $data = $request->validate([
             'equipment_id'      => 'required|exists:equipment,equipment_id',
             'reserved_quantity' => 'required|integer|min:1', 
@@ -47,49 +42,45 @@ class ReservationController extends Controller
             'delivery_address'  => 'nullable|string',
             'latitude'          => 'nullable|numeric',
             'longitude'         => 'nullable|numeric',
-            'user_id'           => 'nullable|exists:users,id',
         ]);
 
-        // 2. Set User ID
-        $data['user_id'] = ($request->user()->role === 'admin') 
-            ? ($request->input('user_id') ?? $request->user()->id) 
-            : $request->user()->id;
+        // 2. Attach User ID
+        $data['user_id'] = $request->user()->id;
+        $data['status']  = 'pending';
 
-        $data['status'] = 'pending';
-        
-        // 3. Find Equipment using the correct primary key
+        // 3. Check Equipment Stock
         $equip = Equipment::where('equipment_id', $data['equipment_id'])->firstOrFail();
-        $qtyRequested = $data['reserved_quantity'];
+        $qty   = $data['reserved_quantity'];
 
-        // 4. Check availability
-        if ($equip->available_quantity < $qtyRequested) {
+        if ($equip->available_quantity < $qty) {
             return response()->json(['message' => "Only {$equip->available_quantity} units available"], 422);
         }
 
-        // 5. Calculate Costs
-        $startDate = Carbon::parse($data['start_date']);
-        $endDate   = Carbon::parse($data['end_date']);
-        $totalDays = $endDate->diffInDays($startDate) + 1;
-        
-        $data['total_days']        = $totalDays;
-        $data['total_rental_cost'] = $totalDays * ($equip->rental_price * $qtyRequested);
+        // 4. Calculate Days and Costs
+        $start = Carbon::parse($data['start_date']);
+        $end   = Carbon::parse($data['end_date']);
+        $days  = $end->diffInDays($start) + 1;
 
-        // 6. Deduct stock
-        $equip->decrement('available_quantity', $qtyRequested);
+        $data['total_days']        = $days;
+        $data['total_rental_cost'] = $days * ($equip->rental_price * $qty);
 
+        // 5. Update Equipment Stock BEFORE saving reservation
+        $equip->decrement('available_quantity', $qty);
         if ($equip->available_quantity <= 0) {
             $equip->update(['status' => 'reserved']);
         }
 
-        // 7. Create Reservation
+        // 6. Create the Record
+        // IMPORTANT: Ensure 'reserved_quantity' is in Reservation.php $fillable array!
         $res = Reservation::create($data);
 
         return response()->json(
-            Reservation::with(['farmer', 'equipment', 'delivery.driver'])->find($res->reservation_id),
+            Reservation::with(['farmer', 'equipment'])->find($res->reservation_id),
             201
         );
     }
 
+    // --- APPROVE RESERVATION ---
     public function approve($id)
     {
         $res = Reservation::with('equipment')->findOrFail($id);
@@ -110,84 +101,41 @@ class ReservationController extends Controller
                 ]
             );
         }
-
-        return response()->json(
-            Reservation::with(['farmer', 'equipment', 'delivery.driver'])->find($id)
-        );
+        return response()->json($res);
     }
 
+    // --- REJECT / CANCEL (Restore Stock) ---
     public function reject($id)
     {
         $res = Reservation::with('equipment')->findOrFail($id);
         $res->update(['status' => 'rejected']);
 
         if ($res->equipment) {
-            // Restore using correct DB column name
+            // Restore the specific quantity reserved
             $res->equipment->increment('available_quantity', $res->reserved_quantity); 
             if ($res->equipment->status === 'reserved') {
                 $res->equipment->update(['status' => 'available']);
             }
         }
-
         return response()->json($res);
     }
 
-    public function cancel($id)
-    {
-        $res = Reservation::with('equipment')->findOrFail($id);
-        if (!in_array($res->status, ['pending', 'approved', 'assigned'])) {
-            return response()->json(['message' => 'Cannot cancel this reservation'], 422);
-        }
-        $res->update(['status' => 'rejected']);
-
-        if ($res->equipment) {
-            $res->equipment->increment('available_quantity', $res->reserved_quantity);
-            if ($res->equipment->status === 'reserved') {
-                $res->equipment->update(['status' => 'available']);
-            }
-        }
-
-        return response()->json($res);
-    }
-
+    // --- RETURN EQUIPMENT (Restore Stock) ---
     public function returnEquipment($id)
     {
         $res   = Reservation::with('equipment')->findOrFail($id);
         $equip = $res->equipment;
 
-        $startDate  = Carbon::parse($res->start_date);
-        $returnDate = Carbon::now();
-        $actualDays = $returnDate->diffInDays($startDate) + 1;
-        
-        // Calculate based on reserved_quantity
-        $totalCost = $actualDays * ($equip->rental_price * $res->reserved_quantity);
-
         $res->update([
-            'status'            => 'completed',
-            'returned_at'       => now(),
-            'total_days'        => $actualDays,
-            'total_rental_cost' => $totalCost,
+            'status'      => 'completed',
+            'returned_at' => now(),
         ]);
 
         if ($equip) {
             $equip->increment('available_quantity', $res->reserved_quantity);
-            if ($equip->status === 'reserved') {
-                $equip->update(['status' => 'available']);
-            }
+            $equip->update(['status' => 'available']);
         }
 
-        return response()->json(
-            Reservation::with(['farmer', 'equipment', 'delivery.driver'])->find($id)
-        );
-    }
-
-    public function destroy($id)
-    {
-        $res = Reservation::findOrFail($id);
-        if (!in_array($res->status, ['completed', 'rejected'])) {
-            return response()->json(['message' => 'Can only delete completed or rejected'], 422);
-        }
-        $res->delete();
-        return response()->json(['message' => 'Deleted']);
+        return response()->json($res);
     }
 }
