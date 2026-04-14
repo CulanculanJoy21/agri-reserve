@@ -90,7 +90,7 @@ class UserController extends Controller
     }
 
     // Method for Map Tracking
-    public function allDriverLocations()
+    public function getActiveDriverLocations()
     {
         return response()->json(
             User::where('role', 'driver')

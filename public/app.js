@@ -2528,35 +2528,6 @@ async function loadNotifications() {
         </div>`).join('')}
     `
     : '<div class="notif-item">No new notifications</div>';
-window._notifs = notifs;
-
-  // Update the UI Badge
-  const unreadCount = visible.filter(n => n.unread).length;
-  const badge = document.getElementById('notif-count');
-  if (badge) {
-    badge.textContent = unreadCount;
-    badge.style.display = unreadCount > 0 ? 'flex' : 'none';
-  }
-
-  // Render the list into the dropdown
-  const list = document.getElementById('notif-list');
-  if (!list) return;
-
-  list.innerHTML = visible.length
-    ? `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border)">
-        <span style="font-size:12px;color:var(--text3)">${unreadCount} unread</span>
-        <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="clearAllNotifs()">Clear all</span>
-      </div>
-      ${visible.map(n => `
-        <div class="notif-item ${n.unread ? 'unread' : ''}" style="display:flex;justify-content:space-between;align-items:center">
-          <div onclick="toggleNotifs(); ${n.action}" style="flex:1;cursor:pointer;padding-right:8px">
-            ${n.text}
-          </div>
-          <span onclick="dismissNotif('${n.key}')" style="color:var(--text3);padding:4px 8px;font-size:16px;cursor:pointer;transition:color 0.2s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">✕</span>
-        </div>`).join('')}
-    `
-    : '<div class="notif-item" style="text-align:center;color:var(--text3);padding:20px">No new notifications</div>';
 }
 
 // ==================== LOGIN ====================
