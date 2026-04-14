@@ -28,10 +28,17 @@ class ReservationController extends Controller
         return response()->json($query->latest()->get());
     }
 
-    // --- CREATE RESERVATION (The Fix is Here) ---
+    // 🟢 ADDED: SHOW METHOD (Fixes the "Eye" button 500 error)
+    public function show($id)
+    {
+        $res = Reservation::with(['farmer', 'equipment', 'delivery.driver', 'feedback'])
+            ->findOrFail($id);
+        return response()->json($res);
+    }
+
+    // --- CREATE RESERVATION ---
     public function store(Request $request)
     {
-        // 1. Validate: Use the exact key Android is sending
         $data = $request->validate([
             'equipment_id'      => 'required|exists:equipment,equipment_id',
             'reserved_quantity' => 'required|integer|min:1', 
@@ -44,11 +51,9 @@ class ReservationController extends Controller
             'longitude'         => 'nullable|numeric',
         ]);
 
-        // 2. Attach User ID
         $data['user_id'] = $request->user()->id;
         $data['status']  = 'pending';
 
-        // 3. Check Equipment Stock
         $equip = Equipment::where('equipment_id', $data['equipment_id'])->firstOrFail();
         $qty   = $data['reserved_quantity'];
 
@@ -56,7 +61,6 @@ class ReservationController extends Controller
             return response()->json(['message' => "Only {$equip->available_quantity} units available"], 422);
         }
 
-        // 4. Calculate Days and Costs
         $start = Carbon::parse($data['start_date']);
         $end   = Carbon::parse($data['end_date']);
         $days  = $end->diffInDays($start) + 1;
@@ -64,14 +68,11 @@ class ReservationController extends Controller
         $data['total_days']        = $days;
         $data['total_rental_cost'] = $days * ($equip->rental_price * $qty);
 
-        // 5. Update Equipment Stock BEFORE saving reservation
         $equip->decrement('available_quantity', $qty);
         if ($equip->available_quantity <= 0) {
             $equip->update(['status' => 'reserved']);
         }
 
-        // 6. Create the Record
-        // IMPORTANT: Ensure 'reserved_quantity' is in Reservation.php $fillable array!
         $res = Reservation::create($data);
 
         return response()->json(
@@ -104,14 +105,36 @@ class ReservationController extends Controller
         return response()->json($res);
     }
 
-    // --- REJECT / CANCEL (Restore Stock) ---
+    // 🟢 ADDED: CANCEL METHOD (Fixes the Cancel button 500 error)
+    public function cancel($id)
+    {
+        $res = Reservation::with('equipment')->findOrFail($id);
+        
+        // Only allow cancellation if it hasn't been completed or rejected already
+        if (!in_array($res->status, ['pending', 'approved', 'assigned'])) {
+            return response()->json(['message' => 'Cannot cancel this reservation'], 422);
+        }
+
+        $res->update(['status' => 'rejected']);
+
+        if ($res->equipment) {
+            // Restore stock based on reserved_quantity
+            $res->equipment->increment('available_quantity', $res->reserved_quantity);
+            if ($res->equipment->status === 'reserved') {
+                $res->equipment->update(['status' => 'available']);
+            }
+        }
+
+        return response()->json($res);
+    }
+
+    // --- REJECT RESERVATION ---
     public function reject($id)
     {
         $res = Reservation::with('equipment')->findOrFail($id);
         $res->update(['status' => 'rejected']);
 
         if ($res->equipment) {
-            // Restore the specific quantity reserved
             $res->equipment->increment('available_quantity', $res->reserved_quantity); 
             if ($res->equipment->status === 'reserved') {
                 $res->equipment->update(['status' => 'available']);
@@ -120,7 +143,7 @@ class ReservationController extends Controller
         return response()->json($res);
     }
 
-    // --- RETURN EQUIPMENT (Restore Stock) ---
+    // --- RETURN EQUIPMENT ---
     public function returnEquipment($id)
     {
         $res   = Reservation::with('equipment')->findOrFail($id);
@@ -137,5 +160,16 @@ class ReservationController extends Controller
         }
 
         return response()->json($res);
+    }
+
+    // 🟢 ADDED: DESTROY METHOD (To allow deleting old records)
+    public function destroy($id)
+    {
+        $res = Reservation::findOrFail($id);
+        if (!in_array($res->status, ['completed', 'rejected'])) {
+            return response()->json(['message' => 'Can only delete completed or rejected reservations'], 422);
+        }
+        $res->delete();
+        return response()->json(['message' => 'Deleted']);
     }
 }
