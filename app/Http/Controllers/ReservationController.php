@@ -40,55 +40,52 @@ class ReservationController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'equipment_id'     => 'required|exists:equipment,equipment_id',
-            'start_date'       => 'required|date',
-            'end_date'         => 'required|date|after_or_equal:start_date',
-            'reservation_type' => 'required|in:pickup,delivery',
-            'notes'            => 'nullable|string',
-            'delivery_address' => 'nullable|string',
-            'latitude'         => 'nullable|numeric',
-            'longitude'        => 'nullable|numeric',
-            'user_id'          => 'nullable|exists:users,id',
+            'equipment_id'      => 'required|exists:equipment,equipment_id',
+            'reserved_quantity' => 'required|integer|min:1', // 🟢 New field
+            'start_date'        => 'required|date',
+            'end_date'          => 'required|date|after_or_equal:start_date',
+            'reservation_type'  => 'required|in:pickup,delivery',
+            'notes'             => 'nullable|string',
+            'delivery_address'  => 'nullable|string',
+            'latitude'          => 'nullable|numeric',
+            'longitude'         => 'nullable|numeric',
+            'user_id'           => 'nullable|exists:users,id',
         ]);
- 
-        // Admin can create for a farmer
-        if ($request->user()->role === 'admin') {
-            $data['user_id'] = $request->input('user_id') ?? $request->user()->id;
-        } else {
-            $data['user_id'] = $request->user()->id;
-        }
- 
+
+        // Set User ID
+        $data['user_id'] = ($request->user()->role === 'admin') 
+            ? ($request->input('user_id') ?? $request->user()->id) 
+            : $request->user()->id;
+
         $data['status'] = 'pending';
- 
-        // Get equipment
         $equip = Equipment::findOrFail($data['equipment_id']);
- 
-        // Check availability
-        $availableQty = $equip->available_quantity ?? 1;
-        if ($availableQty <= 0) {
-            return response()->json(['message' => 'Equipment not available — no units left'], 422);
+        $qtyRequested = $data['reserved_quantity'];
+
+        // 🟢 Check if enough units are available
+        if (($equip->available_quantity) < $qtyRequested) {
+            return response()->json(['message' => "Only {$equip->available_quantity} units available"], 422);
         }
- 
-        // Calculate rental cost
-        $startDate              = Carbon::parse($data['start_date']);
-        $endDate                = Carbon::parse($data['end_date']);
-        $totalDays              = $endDate->diffInDays($startDate) + 1;
+
+        // Calculate Costs (Days * Price * Quantity)
+        $startDate = Carbon::parse($data['start_date']);
+        $endDate   = Carbon::parse($data['end_date']);
+        $totalDays = $endDate->diffInDays($startDate) + 1;
+        
         $data['total_days']        = $totalDays;
-        $data['total_rental_cost'] = $totalDays * $equip->rental_price;
- 
-        // Deduct available quantity
-        $equip->decrement('available_quantity');
- 
-        // Mark as reserved only when ALL units are taken
-        if (($equip->available_quantity ?? 1) <= 0) {
+        $data['total_rental_cost'] = $totalDays * ($equip->rental_price * $qtyRequested);
+
+        // 🟢 Deduct the EXACT requested quantity
+        $equip->decrement('available_quantity', $qtyRequested);
+
+        // Update status to 'reserved' only if total stock hits zero
+        if ($equip->available_quantity <= 0) {
             $equip->update(['status' => 'reserved']);
         }
- 
+
         $res = Reservation::create($data);
- 
+
         return response()->json(
-            Reservation::with(['farmer', 'equipment', 'delivery.driver'])
-                ->find($res->reservation_id),
+            Reservation::with(['farmer', 'equipment', 'delivery.driver'])->find($res->reservation_id),
             201
         );
     }
@@ -129,11 +126,11 @@ class ReservationController extends Controller
  
         // Restore quantity
         if ($res->equipment) {
-            $res->equipment->increment('available_quantity');
-            if ($res->equipment->status === 'reserved') {
-                $res->equipment->update(['status' => 'available']);
-            }
-        }
+            $res->equipment->increment('available_quantity', $res->reserved_quantity);  
+        if ($res->equipment->status === 'reserved') {
+            $res->equipment->update(['status' => 'available']);
+    }
+}
  
         return response()->json($res);
     }
@@ -158,11 +155,12 @@ class ReservationController extends Controller
  
         // Restore quantity
         if ($res->equipment) {
-            $res->equipment->increment('available_quantity');
-            if ($res->equipment->status === 'reserved') {
-                $res->equipment->update(['status' => 'available']);
-            }
+        $res->equipment->increment('available_quantity', $res->reserved_quantity);
+        
+        if ($res->equipment->status === 'reserved') {
+            $res->equipment->update(['status' => 'available']);
         }
+    }
  
         return response()->json($res);
     }

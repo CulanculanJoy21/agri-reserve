@@ -916,58 +916,140 @@ async function showAddReservation() {
     API.get('/farmers'),
     API.get('/equipment'),
   ]);
-  const availEquip = (equipment || []).filter(e => e.status === 'available');
+
+  // Show equipment that has at least 1 unit available
+  const availEquip = (equipment || []).filter(e => e.available_quantity > 0);
+
   openModal('New Reservation', `
-    <div class="form-group">
-      <label>Farmer</label>
-      <select class="form-control" id="res-farmer">
-        <option value="">-- Select Farmer --</option>
-        ${(farmers || []).map(f => `<option value="${f.id}">${f.name}</option>`).join('')}
-      </select>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Farmer</label>
+        <select class="form-control" id="res-farmer">
+          <option value="">-- Select Farmer --</option>
+          ${(farmers || []).map(f => `<option value="${f.id}">${f.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="flex: 0 0 100px;">
+        <label>Qty</label>
+        <input type="number" id="res-qty" class="form-control" value="1" min="1">
+      </div>
     </div>
+
     <div class="form-group">
       <label>Equipment</label>
       <select class="form-control" id="res-equip">
         <option value="">-- Select Equipment --</option>
-        ${availEquip.map(e => `<option value="${e.equipment_id}">${e.equipment_name} — ₱${e.rental_price}/day</option>`).join('')}
+        ${availEquip.map(e => `<option value="${e.equipment_id}">${e.equipment_name} (${e.available_quantity} left) — ₱${e.rental_price}/day</option>`).join('')}
       </select>
     </div>
+
     <div class="form-row">
       <div class="form-group"><label>Start Date</label><input class="form-control" type="date" id="res-start"/></div>
       <div class="form-group"><label>End Date</label><input class="form-control" type="date" id="res-end"/></div>
     </div>
+
     <div class="form-group">
       <label>Reservation Type</label>
-      <select class="form-control" id="res-type">
-        <option value="pickup">Pickup</option>
-        <option value="delivery">Delivery</option>
+      <select class="form-control" id="res-type" onchange="handleResTypeChange(this.value)">
+        <option value="pickup">Pickup (At Co-op)</option>
+        <option value="delivery">Delivery (Pin on Map)</option>
       </select>
     </div>
+
+    <div id="res-map-section" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top: 15px;">
+      <label style="font-size:12px; color:var(--text3); display:block; margin-bottom:8px">📍 PIN DELIVERY LOCATION</label>
+      <div id="res-map-picker" style="height: 250px; border-radius: 8px; border:1px solid var(--border); background: #1a222c;"></div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="form-group"><label>Lat</label><input class="form-control" id="res-lat" readonly placeholder="0.0000"></div>
+        <div class="form-group"><label>Lng</label><input class="form-control" id="res-lng" readonly placeholder="0.0000"></div>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="createReservation()">Create Reservation</button>
     </div>
   `);
+
+  // Define the visibility toggle and map init logic
+  window.handleResTypeChange = function(val) {
+    const mapSection = document.getElementById('res-map-section');
+    if (val === 'delivery') {
+      mapSection.style.display = 'block';
+      initResMapPicker();
+    } else {
+      mapSection.style.display = 'none';
+    }
+  };
+}
+
+// 🟢 NEW: Map Initialization Script
+function initResMapPicker() {
+  // Use a timeout to ensure the modal animation has finished
+  setTimeout(() => {
+    const defaultCoords = [7.9063, 125.0942]; // Valencia City
+    const map = L.map('res-map-picker').setView(defaultCoords, 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let marker;
+    map.on('click', function(e) {
+      if (marker) map.removeLayer(marker);
+      marker = L.marker(e.latlng).addTo(map);
+      document.getElementById('res-lat').value = e.latlng.lat.toFixed(6);
+      document.getElementById('res-lng').value = e.latlng.lng.toFixed(6);
+      showToast('Location pinned!', 'info');
+    });
+
+    // Fix for Leaflet grey tiles in modals
+    setTimeout(() => map.invalidateSize(), 400);
+  }, 300);
 }
 
 async function createReservation() {
   const farmerId = parseInt(document.getElementById('res-farmer').value);
   const equipId  = parseInt(document.getElementById('res-equip').value);
+  const qty      = parseInt(document.getElementById('res-qty').value) || 1;
   const start    = document.getElementById('res-start').value;
   const end      = document.getElementById('res-end').value;
   const type     = document.getElementById('res-type').value;
-  if (!farmerId || !equipId || !start || !end) { showToast('All fields required', 'error'); return; }
+  const lat      = document.getElementById('res-lat').value;
+  const lng      = document.getElementById('res-lng').value;
+
+  // Basic Validation
+  if (!farmerId || !equipId || !start || !end) { 
+    showToast('Please fill in all basic fields', 'error'); 
+    return; 
+  }
+
+  // Map Validation for Deliveries
+  if (type === 'delivery' && (!lat || !lng)) {
+    showToast('Please pin a delivery location on the map', 'error');
+    return;
+  }
+
   const result = await API.post('/reservations', {
-    user_id: farmerId, equipment_id: equipId,
-    start_date: start, end_date: end, reservation_type: type
+    user_id:           farmerId, 
+    equipment_id:      equipId,
+    reserved_quantity: qty,          // 🟢 New field
+    start_date:        start, 
+    end_date:          end, 
+    reservation_type:  type,
+    latitude:          lat || null,  // 🟢 New field
+    longitude:         lng || null   // 🟢 New field
   });
+
   if (result && !result.message) {
-    closeModal(); showToast('Reservation created!'); pages.reservations();
+    closeModal(); 
+    showToast(`Reservation created for ${qty} unit(s)!`); 
+    pages.reservations();
   } else {
+    // This will show the "Only X units available" message from your Laravel Controller
     showToast(result?.message || 'Failed to create', 'error');
   }
 }
-
 async function exportReservations() {
   const reservations = await API.get('/reservations') || [];
   const rows = [['ID','Farmer','Equipment','Start','End','Type','Status']];
