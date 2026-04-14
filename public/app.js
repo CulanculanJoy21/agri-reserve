@@ -1735,138 +1735,150 @@ function initTrackingMap(activeDeliveries) {
  
 // ── LOAD DRIVER LOCATIONS ─────────────────────────────────────
 async function loadDriverLocations(activeDeliveries) {
-  const drivers = await API.get('/drivers/locations');
-  if (!drivers || !trackingMap) return;
- 
-  const driverList = document.getElementById('driver-list');
- 
-  if (drivers.length === 0) {
-    if (driverList) driverList.innerHTML = `
-      <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
-        No drivers currently active
-      </div>`;
-    return;
-  }
- 
-  drivers.forEach((driver, index) => {
-    const lat = parseFloat(driver.current_lat);
-    const lng = parseFloat(driver.current_lng);
-    if (!lat || !lng) return;
- 
-    // Slight offset if drivers at same location
-    const offsetLat = lat + (index * 0.0002);
-    const offsetLng = lng + (index * 0.0002);
- 
-    // Format last updated time safely
-    let timeText = 'Just now';
-    if (driver.location_updated_at) {
-      const updated = new Date(driver.location_updated_at);
-      if (!isNaN(updated.getTime())) {
-        timeText = updated.toLocaleTimeString();
-      }
+    const drivers = await API.get('/drivers/locations');
+    const driverList = document.getElementById('driver-list');
+    const badge = document.querySelector('.tracking-badge');
+
+    if (!drivers || !trackingMap) return;
+
+    // 1. Update the "Live" badge at the top
+    if (badge) {
+        if (drivers.length > 0) {
+            badge.style.display = 'flex';
+            badge.innerHTML = `<div class="pulse-dot"></div> ${drivers.length} driver${drivers.length > 1 ? 's' : ''} live`;
+        } else {
+            badge.style.display = 'none';
+        }
     }
- 
-    const driverIcon = L.divIcon({
-      html: `
-        <div style="position:relative;width:20px;height:20px">
-          <div style="position:absolute;top:2px;left:2px;background:#4ade80;
-                      width:16px;height:16px;border-radius:50%;
-                      border:3px solid white;
-                      box-shadow:0 2px 8px rgba(74,222,128,0.7)">
-          </div>
-          <div style="position:absolute;top:0;left:0;width:20px;height:20px;
-                      border-radius:50%;border:2px solid #4ade80;
-                      animation:pulse-green 1.5s infinite;opacity:0.5">
-          </div>
-        </div>`,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-      className: ''
+
+    // 2. Handle Empty State
+    if (drivers.length === 0) {
+        if (driverList) {
+            driverList.innerHTML = `
+                <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
+                    No drivers currently active
+                </div>`;
+        }
+        // Remove old driver markers if they go offline
+        Object.keys(driverMarkers).forEach(id => {
+            trackingMap.removeLayer(driverMarkers[id]);
+            delete driverMarkers[id];
+        });
+        return;
+    }
+
+    // 3. Update or Create Driver Markers
+    drivers.forEach((driver, index) => {
+        const lat = parseFloat(driver.current_lat);
+        const lng = parseFloat(driver.current_lng);
+        if (!lat || !lng) return;
+
+        // Slight offset to prevent overlapping icons
+        const offsetLat = lat + (index * 0.0002);
+        const offsetLng = lng + (index * 0.0002);
+
+        let timeText = 'Just now';
+        if (driver.location_updated_at) {
+            const updated = new Date(driver.location_updated_at);
+            if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
+        }
+
+        const driverIcon = L.divIcon({
+            html: `
+                <div style="position:relative;width:20px;height:20px">
+                    <div style="position:absolute;top:2px;left:2px;background:#4ade80;
+                                width:16px;height:16px;border-radius:50%;
+                                border:3px solid white;box-shadow:0 2px 8px rgba(74,222,128,0.7)">
+                    </div>
+                    <div style="position:absolute;top:0;left:0;width:20px;height:20px;
+                                border-radius:50%;border:2px solid #4ade80;
+                                animation:pulse-green 1.5s infinite;opacity:0.5">
+                    </div>
+                </div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+            className: ''
+        });
+
+        const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Last Update: ${timeText}</small>`;
+
+        if (driverMarkers[driver.id]) {
+            // Smoothly slide the existing marker
+            driverMarkers[driver.id]
+                .setLatLng([offsetLat, offsetLng])
+                .setPopupContent(popupContent);
+        } else {
+            // Create brand new marker
+            driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
+                .addTo(trackingMap)
+                .bindPopup(popupContent);
+        }
     });
- 
-    if (driverMarkers[driver.id]) {
-      // Smoothly move existing marker
-      driverMarkers[driver.id]
-        .setLatLng([offsetLat, offsetLng])
-        .setPopupContent(`
-          <strong>🚗 ${driver.name}</strong><br>
-          <small>Updated: ${timeText}</small>
-        `);
-    } else {
-      // Create new marker
-      driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
-        .addTo(trackingMap)
-        .bindPopup(`
-          <strong>🚗 ${driver.name}</strong><br>
-          <small>Updated: ${timeText}</small>
-        `);
+
+    // 4. Update the Driver Info List (below the map)
+    if (driverList) {
+        driverList.innerHTML = drivers.map(d => {
+            let timeText = 'Just now';
+            if (d.location_updated_at) {
+                const updated = new Date(d.location_updated_at);
+                if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
+            }
+            return `
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            padding:12px 16px;background:var(--bg3);border-radius:10px">
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <div class="pulse-dot"></div>
+                        <div>
+                            <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
+                            <div style="font-size:11px;color:var(--text3)">
+                                📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}
+                                · Updated: ${timeText}
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm"
+                        onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">
+                        🎯 Focus
+                    </button>
+                </div>`;
+        }).join('');
     }
-  });
- 
-  // Update driver info list below map
-  if (driverList) {
-    driverList.innerHTML = drivers.map(d => {
-      let timeText = 'Just now';
-      if (d.location_updated_at) {
-        const updated = new Date(d.location_updated_at);
-        if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
-      }
-      return `
-        <div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:12px 16px;background:var(--bg3);border-radius:10px">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div class="pulse-dot"></div>
-            <div>
-              <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
-              <div style="font-size:11px;color:var(--text3)">
-                📍 ${parseFloat(d.current_lat).toFixed(5)},
-                   ${parseFloat(d.current_lng).toFixed(5)}
-                · Updated: ${timeText}
-              </div>
-            </div>
-          </div>
-          <button class="btn btn-ghost btn-sm"
-            onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">
-            🎯 Focus
-          </button>
-        </div>
-      `;
-    }).join('');
-  }
 }
- 
- 
+
 // ── FOCUS ON DRIVER ───────────────────────────────────────────
 window.centerOnDriver = function(lat, lng, name) {
-  if (trackingMap) {
-    trackingMap.flyTo([parseFloat(lat), parseFloat(lng)], 16, {
-      animate: true,
-      duration: 1.5
-    });
-    showToast(`Focused on ${name} 🎯`);
-  }
+    if (trackingMap) {
+        trackingMap.flyTo([parseFloat(lat), parseFloat(lng)], 16, {
+            animate: true,
+            duration: 1.5
+        });
+        showToast(`Focusing on ${name} 🎯`, 'info');
+    }
 };
- 
- 
-// ── MANUAL REFRESH ────────────────────────────────────────────
+
+// ── REFRESH & UTILITIES ────────────────────────────────────────
 async function refreshDriverLocations() {
-  const deliveries = await API.get('/deliveries') || [];
-  const active     = deliveries.filter(d => d.delivery_status === 'in_transit');
-  await loadDriverLocations(active);
-  showToast('Driver locations refreshed ✓');
+    const deliveries = await API.get('/deliveries') || [];
+    const active = deliveries.filter(d => d.delivery_status === 'in_transit');
+    await loadDriverLocations(active);
+    showToast('Driver positions updated ✓');
 }
 
 function calcDeliveryFee() {
-  const dist = parseFloat(document.getElementById('calc-dist').value) || 0;
-  const rate = parseFloat(document.getElementById('calc-rate').value) || 0;
-  document.getElementById('calc-result').textContent = `₱${(dist*rate).toFixed(2)}`;
-  document.getElementById('calc-formula').textContent = `Formula: ${dist}km × ₱${rate}/km`;
+    const dist = parseFloat(document.getElementById('calc-dist').value) || 0;
+    const rate = parseFloat(document.getElementById('calc-rate').value) || 0;
+    document.getElementById('calc-result').textContent = `₱${(dist * rate).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('calc-formula').textContent = `Formula: ${dist}km × ₱${rate}/km`;
 }
 
 async function updateDeliveryStatus(id, status) {
-  const result = await API.put(`/deliveries/${id}`, { delivery_status: status });
-  if (result) { showToast(`Delivery #D${id} updated to ${status}`); pages.deliveries(); }
-  else showToast('Failed to update', 'error');
+    const result = await API.put(`/deliveries/${id}`, { delivery_status: status });
+    if (result) { 
+        showToast(`Delivery #D${id} is now ${status.replace('_', ' ')}`); 
+        pages.deliveries(); 
+    } else {
+        showToast('Failed to update status', 'error');
+    }
 }
 
 // ---- MAINTENANCE ----
@@ -2089,67 +2101,101 @@ function showAddUser(role) {
   `);
 }
 
+// 🟢 MODIFIED: Added validation and active flag
 async function saveUser(role) {
   const name = document.getElementById('usr-name').value.trim();
-  if (!name) { showToast('Name required', 'error'); return; }
+  const email = document.getElementById('usr-email').value.trim();
+  const pass = document.getElementById('usr-pass').value;
+
+  if (!name || !email || !pass) { 
+    showToast('Name, Email, and Password are required', 'error'); 
+    return; 
+  }
+
   const result = await API.post('/users', {
-    name, email: document.getElementById('usr-email').value,
-    password: document.getElementById('usr-pass').value, role,
+    name, 
+    email,
+    password: pass, 
+    role,
     phone: document.getElementById('usr-phone').value,
     address: document.getElementById('usr-address').value,
+    is_active: true // 🟢 Ensures the user is immediately usable
   });
+
   if (result && !result.message) {
     closeModal();
-    showToast(`${role.charAt(0).toUpperCase()+role.slice(1)} account created!`);
+    showToast(`${role.charAt(0).toUpperCase() + role.slice(1)} account created!`);
     role === 'farmer' ? pages.farmers() : pages.drivers();
   } else {
-    showToast(result?.message || 'Failed to create account', 'error');
+    showToast(result?.message || 'Email might already be taken', 'error');
   }
 }
 
+// 🟢 MODIFIED: Added Live Tracking Info to User Profile
 async function viewUser(id) {
   const u = await API.get(`/users/${id}`);
   if (!u) return;
   const resHistory = u.reservations || [];
   const delHistory = u.deliveries  || [];
+
   openModal('User Profile', `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
-      <div class="admin-avatar" style="width:52px;height:52px;font-size:22px">${u.name[0]}</div>
+      <div class="admin-avatar" style="width:52px;height:52px;font-size:22px;background:${u.role === 'driver' ? 'var(--purple)' : 'var(--blue)'}">${u.name[0]}</div>
       <div>
         <div style="font-family:var(--font-head);font-size:18px;font-weight:700">${u.name}</div>
         <div style="color:var(--text3);font-size:13px">${u.email}</div>
         <div style="margin-top:4px">${statusBadge(u.role)}</div>
       </div>
     </div>
+
+    ${u.role === 'driver' && u.current_lat ? `
+      <div style="padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:16px;border:1px solid var(--purple)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">📡 LIVE TRACKING STATUS</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--accent)">Active at ${u.current_lat}, ${u.current_lng}</div>
+            <div style="font-size:11px;color:var(--text3)">Last seen: ${u.location_updated_at ? new Date(u.location_updated_at).toLocaleString() : 'Never'}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="closeModal(); navigate('deliveries'); setTimeout(() => centerOnDriver(${u.current_lat}, ${u.current_lng}, '${u.name}'), 500)">
+            🎯 Locate
+          </button>
+        </div>
+      </div>
+    ` : ''}
+
     <div class="form-row" style="margin-bottom:12px">
       <div><label style="font-size:11px;color:var(--text3)">PHONE</label><div>${u.phone || '—'}</div></div>
       <div><label style="font-size:11px;color:var(--text3)">JOINED</label><div>${formatDate(u.created_at)}</div></div>
     </div>
     <div style="margin-bottom:16px"><label style="font-size:11px;color:var(--text3)">ADDRESS</label><div>${u.address || '—'}</div></div>
+
     ${u.role === 'farmer' ? `
       <div class="section-divider">Reservation History (${resHistory.length})</div>
-      ${resHistory.length ? resHistory.map(r => `
+      ${resHistory.map(r => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
           <div>
             <strong>${r.equipment ? r.equipment.equipment_name : '—'}</strong>
             <div style="font-size:11px;color:var(--text3)">${formatDate(r.start_date)} → ${formatDate(r.end_date)}</div>
           </div>
           <div style="display:flex;gap:6px">${statusBadge(r.status)}${statusBadge(r.reservation_type)}</div>
-        </div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:10px 0">No reservations yet</div>'}
+        </div>`).join('')}
     ` : ''}
+
     ${u.role === 'driver' ? `
       <div class="section-divider">Delivery History (${delHistory.length})</div>
-      ${delHistory.length ? delHistory.map(d => `
+      ${delHistory.map(d => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
           <div>
             <strong>${d.reservation?.equipment?.equipment_name || '—'}</strong>
-            <div style="font-size:11px;color:var(--text3)">→ ${d.reservation?.farmer?.name || '—'} · ${d.distance_km}km · ₱${d.delivery_fee}</div>
-            <div style="font-size:11px;color:var(--text3)">${formatDate(d.delivery_date)}</div>
+            <div style="font-size:11px;color:var(--text3)">→ ${d.reservation?.farmer?.name || '—'} · ${d.distance_km}km</div>
           </div>
           <div>${statusBadge(d.delivery_status)}</div>
-        </div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:10px 0">No deliveries yet</div>'}
+        </div>`).join('')}
     ` : ''}
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>
   `);
 }
 

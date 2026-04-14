@@ -96,6 +96,7 @@ class UserController extends Controller
         return response()->json(
             User::where('role', 'driver')
                 ->whereNotNull('current_lat')
+                ->whereNotNull('current_lng')
                 ->where('location_updated_at', '>=', now()->subHours(24))
                 ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
         );

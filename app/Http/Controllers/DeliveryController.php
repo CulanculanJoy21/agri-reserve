@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 class DeliveryController extends Controller
 {
-    // ── ALL DELIVERIES (admin) ─────────────────────────────
+    // ── ALL DELIVERIES (admin dashboard) ─────────────────────────────
     public function index()
     {
         return response()->json(
@@ -18,7 +18,7 @@ class DeliveryController extends Controller
         );
     }
 
-    // ── DRIVER'S OWN DELIVERIES ────────────────────────────
+    // ── DRIVER'S OWN DELIVERIES (for Android List) ────────────────────────────
     public function driverDeliveries($driverId)
     {
         return response()->json(
@@ -29,7 +29,7 @@ class DeliveryController extends Controller
         );
     }
 
-    // ── CREATE DELIVERY (admin assigns) ───────────────────
+    // ── CREATE DELIVERY (When admin assigns a driver) ───────────────────
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -69,14 +69,24 @@ class DeliveryController extends Controller
         );
     }
 
-    // ── UPDATE STATUS (Fixed the $res Error) ────────────────
+    // ── UPDATE STATUS (Syncs with Android "Start/Complete" buttons) ────────────────
     public function update(Request $request, $id)
     {
-        // 1. Find delivery and load reservation relationship
         $delivery = Delivery::with('reservation')->findOrFail($id);
-        $res = $delivery->reservation; // 🟢 FIX: This defines $res so line 85+ works
+        $res = $delivery->reservation; 
 
         $newDeliveryStatus = $request->input('delivery_status', $delivery->delivery_status);
+
+        // 🟢 FIX FOR MAP: If status is shipping, update the User's activity timestamp
+        // This ensures they show up on the "Live Tracking" map immediately.
+        if ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
+            $request->user()->update([
+                'location_updated_at' => now(),
+                // If coordinates are sent in this request, save them too
+                'current_lat' => $request->input('latitude', $request->user()->current_lat),
+                'current_lng' => $request->input('longitude', $request->user()->current_lng),
+            ]);
+        }
 
         // Calculate fee safely
         $dist = $request->input('distance_km', $delivery->distance_km);
@@ -90,13 +100,12 @@ class DeliveryController extends Controller
             'delivery_fee'    => $newFee,
             'delivery_status' => $newDeliveryStatus,
             'delivery_date'   => $request->input('delivery_date', $delivery->delivery_date),
-            // 🟢 These now work because $res is defined above
             'delivery_address' => $res ? $res->delivery_address : $delivery->delivery_address,
             'latitude'         => $res ? $res->latitude : $delivery->latitude,
             'longitude'        => $res ? $res->longitude : $delivery->longitude,
         ]);
 
-        // Logic for Reservation Status
+        // Logic for Reservation Status Sync
         if ($newDeliveryStatus === 'delivered') {
             if ($res) {
                 $res->update(['status' => 'completed']);
@@ -105,7 +114,6 @@ class DeliveryController extends Controller
                 }
             }
         } elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
-            // 🟢 Handle both 'shipping' (from Android) or 'in_transit'
             if ($res) {
                 $res->update(['status' => 'assigned']);
             }
@@ -117,18 +125,19 @@ class DeliveryController extends Controller
         );
     }
 
+    // ── LIVE LOCATION UPDATE (Called by Android GPS Service) ───────────────────────
     public function updateDriverLocation(Request $request)
     {
         $request->validate([
-            'lat' => 'required|numeric',
-            'lng' => 'required|numeric',
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
         ]);
 
         $user = $request->user();
 
         $user->update([
-            'current_lat' => $request->lat,
-            'current_lng' => $request->lng,
+            'current_lat' => $request->latitude,
+            'current_lng' => $request->longitude,
             'location_updated_at' => now(),
         ]);
 
