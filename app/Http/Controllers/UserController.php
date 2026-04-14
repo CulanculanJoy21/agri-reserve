@@ -99,6 +99,29 @@ class UserController extends Controller
                 ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
         );
     }
+    public function farmerDashboard(Request $request)
+    {
+        $user = $request->user();
+
+        // The "with(['equipment', 'delivery'])" part is what fixes the ₱0.00 bug
+        $recentBookings = Reservation::where('user_id', $user->id)
+            ->with(['equipment', 'delivery']) 
+            ->latest()
+            ->take(5)
+            ->get();
+
+        $stats = [
+            'total'   => Reservation::where('user_id', $user->id)->count(),
+            'pending' => Reservation::where('user_id', $user->id)->whereIn('status', ['pending', 'approved', 'assigned'])->count(),
+            'done'    => Reservation::where('user_id', $user->id)->where('status', 'completed')->count(),
+        ];
+
+        return response()->json([
+            'user'            => $user,
+            'stats'           => $stats,
+            'recent_bookings' => $recentBookings
+        ]);
+    }
 
     public function update(Request $request, $id)
     {
