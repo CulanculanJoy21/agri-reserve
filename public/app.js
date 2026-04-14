@@ -450,13 +450,19 @@ function showAddEquipment() {
       <div class="form-group"><label>Rental Price (₱/day)</label><input class="form-control" type="number" id="eq-price" placeholder="0"/></div>
       <div class="form-group"><label>Storage Location</label><input class="form-control" id="eq-loc" placeholder="e.g. Main Shed A"/></div>
     </div>
-    <div class="form-group">
-      <label>Status</label>
-      <select class="form-control" id="eq-status">
-        <option value="available">Available</option>
-        <option value="reserved">Reserved</option>
-        <option value="maintenance">Maintenance</option>
-      </select>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Units (Stock)</label>
+        <input class="form-control" type="number" id="eq-qty" value="1" min="1"/>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select class="form-control" id="eq-status">
+          <option value="available">Available</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="reserved">Reserved (Out of Stock)</option>
+        </select>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -467,7 +473,16 @@ function showAddEquipment() {
 
 async function saveEquipment() {
   const name = document.getElementById('eq-name').value.trim();
-  if (!name) { showToast('Equipment name is required', 'error'); return; }
+  
+  // 🟢 Get the quantity from the new input field
+  const qtyInput = document.getElementById('eq-qty');
+  const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+  
+  if (!name) { 
+    showToast('Equipment name is required', 'error'); 
+    return; 
+  }
+
   const result = await API.post('/equipment', {
     equipment_name: name,
     category:       document.getElementById('eq-cat').value,
@@ -475,10 +490,14 @@ async function saveEquipment() {
     rental_price:   parseFloat(document.getElementById('eq-price').value) || 0,
     location:       document.getElementById('eq-loc').value,
     status:         document.getElementById('eq-status').value,
+    // 🟢 Send the new inventory data
+    quantity:       qty,
+    available_quantity: qty 
   });
+
   if (result && !result.message) {
     closeModal();
-    showToast('Equipment added successfully!');
+    showToast(`Equipment added successfully with ${qty} units!`);
     pages.equipment();
   } else {
     showToast(result?.message || 'Failed to save', 'error');
@@ -498,21 +517,33 @@ async function showEditEquipment(id) {
       <div class="form-group"><label>Rental Price (₱/day)</label><input class="form-control" type="number" id="eq-price" value="${e.rental_price}"/></div>
       <div class="form-group"><label>Storage Location</label><input class="form-control" id="eq-loc" value="${e.location || ''}"/></div>
     </div>
+
+    <div class="section-divider" style="margin: 15px 0 10px; font-size: 11px; color: var(--text3); border-bottom: 1px solid var(--border)">INVENTORY CONTROL</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Units (Total Stock)</label>
+        <input class="form-control" type="number" id="eq-qty" value="${e.quantity || 1}"/>
+      </div>
+      <div class="form-group">
+        <label>Available Units (Current)</label>
+        <input class="form-control" type="number" id="eq-avail" value="${e.available_quantity || 1}"/>
+      </div>
+    </div>
+
     <div class="form-group">
       <label>Status</label>
       <select class="form-control" id="eq-status">
         <option value="available" ${e.status==='available'?'selected':''}>Available</option>
-        <option value="reserved" ${e.status==='reserved'?'selected':''}>Reserved</option>
+        <option value="reserved" ${e.status==='reserved'?'selected':''}>Reserved (Out of Stock)</option>
         <option value="maintenance" ${e.status==='maintenance'?'selected':''}>Maintenance</option>
       </select>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="updateEquipment(${id})">Update</button>
+      <button class="btn btn-primary" onclick="updateEquipment(${id})">Update Equipment</button>
     </div>
   `);
 }
-
 async function updateEquipment(id) {
   const result = await API.put(`/equipment/${id}`, {
     equipment_name: document.getElementById('eq-name').value,
@@ -521,11 +552,19 @@ async function updateEquipment(id) {
     rental_price:   parseFloat(document.getElementById('eq-price').value) || 0,
     location:       document.getElementById('eq-loc').value,
     status:         document.getElementById('eq-status').value,
+    // 🟢 Send the updated inventory numbers
+    quantity:       parseInt(document.getElementById('eq-qty').value) || 1,
+    available_quantity: parseInt(document.getElementById('eq-avail').value) || 0
   });
+
   closeModal();
-  if (result) showToast('Equipment updated!');
-  else showToast('Failed to update', 'error');
-  pages.equipment();
+
+  if (result) {
+    showToast('Equipment updated successfully!');
+    pages.equipment(); // Refresh the list to show new stock levels
+  } else {
+    showToast('Failed to update equipment', 'error');
+  }
 }
 
 async function deleteEquipment(id) {

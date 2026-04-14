@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{id}', [UserController::class, 'destroy']);
         Route::get('/farmers',       [UserController::class, 'farmers']);
         Route::get('/drivers',       [UserController::class, 'drivers']);
+        
     });
 
     // Equipment (admin CRUD only)
@@ -120,6 +121,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/reservations/{id}/complete',[ReservationController::class, 'complete']);
     Route::put('/reservations/{id}/cancel',  [ReservationController::class, 'cancel']);
     Route::delete('/reservations/{id}',      [ReservationController::class, 'destroy']);
+    Route::put('/reservations/{id}/return',  [ReservationController::class, 'returnEquipment']);
 
     // Deliveries
     Route::get('/deliveries/driver/{driver_id}', [DeliveryController::class, 'driverDeliveries']);
