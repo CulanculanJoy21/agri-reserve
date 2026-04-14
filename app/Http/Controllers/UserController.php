@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Reservation; // Added this import for the dashboard
 
 class UserController extends Controller
 {
@@ -36,13 +37,12 @@ class UserController extends Controller
         );
     }
 
-    // --- FIXED STORE METHOD ---
     public function store(Request $request)
     {
         $data = $request->validate([
             'name'     => 'required|string|max:100',
             'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6', // Matches your 6-char UI requirement
+            'password' => 'required|min:6',
             'role'     => 'required|in:admin,farmer,driver',
             'phone'    => 'nullable|string|max:20',
             'address'  => 'nullable|string',
@@ -72,7 +72,6 @@ class UserController extends Controller
         );
     }
 
-    // Driver updates their own location
     public function updateLocation(Request $request)
     {
         $request->validate([
@@ -89,7 +88,6 @@ class UserController extends Controller
         return response()->json(['status' => 'success']);
     }
 
-    // Method for Map Tracking
     public function getActiveDriverLocations()
     {
         return response()->json(
@@ -99,11 +97,12 @@ class UserController extends Controller
                 ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
         );
     }
+
+    // 🟢 FULL Dashboard Method (Fixed ₱0.00)
     public function farmerDashboard(Request $request)
     {
         $user = $request->user();
 
-        // The "with(['equipment', 'delivery'])" part is what fixes the ₱0.00 bug
         $recentBookings = Reservation::where('user_id', $user->id)
             ->with(['equipment', 'delivery']) 
             ->latest()
@@ -112,8 +111,10 @@ class UserController extends Controller
 
         $stats = [
             'total'   => Reservation::where('user_id', $user->id)->count(),
-            'pending' => Reservation::where('user_id', $user->id)->whereIn('status', ['pending', 'approved', 'assigned'])->count(),
-            'done'    => Reservation::where('user_id', $user->id)->where('status', 'completed')->count(),
+            'pending' => Reservation::where('user_id', $user->id)
+                ->whereIn('status', ['pending', 'approved', 'assigned'])->count(),
+            'done'    => Reservation::where('user_id', $user->id)
+                ->where('status', 'completed')->count(),
         ];
 
         return response()->json([

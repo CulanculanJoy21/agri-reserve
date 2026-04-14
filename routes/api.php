@@ -13,7 +13,6 @@ use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
 
-
 Route::get('/calculate-distance', function(Request $request) {
     $lat2 = (float) $request->query('lat');
     $lng2 = (float) $request->query('lng');
@@ -22,12 +21,10 @@ Route::get('/calculate-distance', function(Request $request) {
         return response()->json(['error' => 'Coordinates required'], 400);
     }
 
-    // Valencia City, Bukidnon — fixed origin
     $lat1 = 7.9038584645570635;
     $lng1 = 125.09822284783338;
 
-    // Haversine formula
-    $earthRadius = 6371; // km
+    $earthRadius = 6371; 
 
     $dLat = deg2rad($lat2 - $lat1);
     $dLng = deg2rad($lng2 - $lng1);
@@ -37,19 +34,15 @@ Route::get('/calculate-distance', function(Request $request) {
        * sin($dLng/2) * sin($dLng/2);
 
     $c = 2 * atan2(sqrt($a), sqrt(1-$a));
-
     $straightLine = $earthRadius * $c;
-
-    // Add 25% buffer for road curves and detours
     $roadDistance = $straightLine * 1.25;
 
-    // Estimate drive time (avg 40 km/h on provincial roads)
-    $minutes      = round(($roadDistance / 40) * 60);
-    $hours        = floor($minutes / 60);
-    $mins         = $minutes % 60;
-    $duration     = $hours > 0
-        ? "{$hours} hr " . ($mins > 0 ? "{$mins} mins" : "")
-        : "{$mins} mins";
+    $minutes = round(($roadDistance / 40) * 60);
+    $hours   = floor($minutes / 60);
+    $mins    = $minutes % 60;
+    $duration = $hours > 0
+         ? "{$hours} hr " . ($mins > 0 ? "{$mins} mins" : "")
+         : "{$mins} mins";
 
     return response()->json([
         'status' => 'OK',
@@ -73,26 +66,25 @@ Route::get('/calculate-distance', function(Request $request) {
     ]);
 });
 
-// ── PUBLIC ROUTES (no login needed) ──────────────────────────
+// ── PUBLIC ROUTES ──────────────────────────
 Route::post('/auth/login',    [AuthController::class, 'login']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::get('/equipment',      [EquipmentController::class, 'index']);
 Route::get('/equipment/{id}', [EquipmentController::class, 'show']);
 
-// ── PROTECTED ROUTES (login required) ────────────────────────
+// ── PROTECTED ROUTES ────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     
-    // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
 
-    // Driver location tracking (CLEANED UP)
-    // The mobile phone calls this to SAVE location
+    // 🟢 NEW: Farmer Dashboard Route
+    Route::get('/farmer/dashboard', [UserController::class, 'farmerDashboard']);
+
     Route::post('/driver/update-location', [UserController::class, 'updateLocation']);
-    
-    // The Map calls this to GET active drivers
     Route::get('/drivers/locations', [UserController::class, 'getActiveDriverLocations']);
-    // Users (admin only)
+
+    // Admin Only
     Route::middleware('role:admin')->group(function () {
         Route::get('/users',         [UserController::class, 'index']);
         Route::post('/users',        [UserController::class, 'store']);
@@ -102,10 +94,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/farmers',       [UserController::class, 'farmers']);
         Route::get('/drivers',       [UserController::class, 'drivers']);
         
-    });
-
-    // Equipment (admin CRUD only)
-    Route::middleware('role:admin')->group(function () {
         Route::post('/equipment',        [EquipmentController::class, 'store']);
         Route::put('/equipment/{id}',    [EquipmentController::class, 'update']);
         Route::delete('/equipment/{id}', [EquipmentController::class, 'destroy']);
@@ -151,7 +139,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/full',            [ReportController::class, 'full']);
     });
 
-    // Settings (admin only)
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings',  [SettingsController::class, 'update']);
 });
