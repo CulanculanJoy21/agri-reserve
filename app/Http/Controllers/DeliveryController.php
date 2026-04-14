@@ -83,7 +83,9 @@ class DeliveryController extends Controller
             'delivery_fee'    => $request->input('distance_km', $delivery->distance_km) * $request->input('price_per_km', $delivery->price_per_km),
             'delivery_status' => $newDeliveryStatus,
             'delivery_date'   => $request->input('delivery_date', $delivery->delivery_date),
-            // ❌ Removed address, latitude, and longitude from here
+            'delivery_address' => $res->delivery_address, // 👈 This ensures the address isn't blank
+            'latitude'         => $res->latitude,
+            'longitude'        => $res->longitude,
         ]);
 
         $delivery->save();

@@ -1329,12 +1329,18 @@ let driverMarkers    = {};
 pages.deliveries = async function () {
   showLoading();
  
-  // Clear any existing tracking interval
-  if (trackingInterval) {
-    clearInterval(trackingInterval);
-    trackingInterval = null;
-  }
- 
+  if (window.trackingInterval) clearInterval(window.trackingInterval);
+
+  // Refresh driver pins every 5 seconds
+  window.trackingInterval = setInterval(async () => {
+    if (currentPage !== 'deliveries') {
+        clearInterval(window.trackingInterval);
+        return;
+    }
+    
+    // This calls your Laravel Cloud route: GET /api/drivers/locations
+    await loadDriverLocations(activeDeliveries);
+  }, 5000);
   // Reset markers
   driverMarkers = {};
  

@@ -84,14 +84,13 @@ class UserController extends Controller
     }
     public function getActiveDriverLocations()
     {
-        $drivers = User::where('role', 'driver')
-            ->whereNotNull('current_lat')
-            ->whereNotNull('current_lng')
-            // This is key for the defense: it filters out inactive drivers
-            ->where('location_updated_at', '>=', now()->subMinutes(30))
-            ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at']);
-
-        return response()->json($drivers);
+        return response()->json(
+            User::where('role', 'driver')
+                ->whereNotNull('current_lat')
+                // Show anyone active in the last 24 hours for the demo
+                ->where('location_updated_at', '>=', now()->subHours(24)) 
+                ->get()
+        );
     }
 
     // Method 2: Sends all active drivers to the Map
