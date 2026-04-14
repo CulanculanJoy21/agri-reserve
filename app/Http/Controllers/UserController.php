@@ -37,12 +37,13 @@ class UserController extends Controller
         );
     }
 
+    // --- FIXED STORE METHOD ---
     public function store(Request $request)
     {
         $data = $request->validate([
             'name'     => 'required|string|max:100',
             'email'    => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'password' => 'required|min:6', // Matches your 6-char UI requirement
             'role'     => 'required|in:admin,farmer,driver',
             'phone'    => 'nullable|string|max:20',
             'address'  => 'nullable|string',
@@ -72,6 +73,7 @@ class UserController extends Controller
         );
     }
 
+    // Driver updates their own location
     public function updateLocation(Request $request)
     {
         $request->validate([
@@ -88,6 +90,7 @@ class UserController extends Controller
         return response()->json(['status' => 'success']);
     }
 
+    // Method for Map Tracking
     public function getActiveDriverLocations()
     {
         return response()->json(
@@ -98,12 +101,13 @@ class UserController extends Controller
         );
     }
 
-    // 🟢 FULL Dashboard Method (Fixed ₱0.00)
+    // 🟢 FULL Dashboard Method (Fixed ₱0.00 and Quantity)
     public function farmerDashboard(Request $request)
     {
         $user = $request->user();
 
         $recentBookings = Reservation::where('user_id', $user->id)
+            // 🟢 LOAD equipment and delivery relationships to get unit count and fees
             ->with(['equipment', 'delivery']) 
             ->latest()
             ->take(5)
