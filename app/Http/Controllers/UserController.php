@@ -36,37 +36,43 @@ class UserController extends Controller
         );
     }
 
+    // --- FIXED STORE METHOD ---
     public function store(Request $request)
     {
         $data = $request->validate([
             'name'     => 'required|string|max:100',
-            'email'    => 'required|email|unique:users',
-            'password' => 'required|min:6',
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:6', // Matches your 6-char UI requirement
             'role'     => 'required|in:admin,farmer,driver',
             'phone'    => 'nullable|string|max:20',
             'address'  => 'nullable|string',
         ]);
 
         $user = User::create([
-            ...$data,
+            'name'     => $data['name'],
+            'email'    => $data['email'],
             'password' => Hash::make($data['password']),
+            'role'     => $data['role'],
+            'phone'    => $data['phone'] ?? null,
+            'address'  => $data['address'] ?? null,
+            'is_active'=> true
         ]);
 
         return response()->json($user, 201);
     }
 
     public function show($id)
-{
-    return response()->json(
-        User::with([
-            'reservations.equipment',
-            'deliveries.reservation.equipment',
-            'deliveries.reservation.farmer',
-        ])->findOrFail($id)
-    );
-}
+    {
+        return response()->json(
+            User::with([
+                'reservations.equipment',
+                'deliveries.reservation.equipment',
+                'deliveries.reservation.farmer',
+            ])->findOrFail($id)
+        );
+    }
+
     // Driver updates their own location
-   // Method 1: Saves the phone's GPS to the DB
     public function updateLocation(Request $request)
     {
         $request->validate([
@@ -82,24 +88,14 @@ class UserController extends Controller
 
         return response()->json(['status' => 'success']);
     }
-    public function getActiveDriverLocations()
-    {
-        return response()->json(
-            User::where('role', 'driver')
-                ->whereNotNull('current_lat')
-                // Show anyone active in the last 24 hours for the demo
-                ->where('location_updated_at', '>=', now()->subHours(24)) 
-                ->get()
-        );
-    }
 
-    // Method 2: Sends all active drivers to the Map
+    // Method for Map Tracking
     public function allDriverLocations()
     {
         return response()->json(
             User::where('role', 'driver')
                 ->whereNotNull('current_lat')
-                ->where('location_updated_at', '>=', now()->subMinutes(30))
+                ->where('location_updated_at', '>=', now()->subHours(24))
                 ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
         );
     }
@@ -114,9 +110,11 @@ class UserController extends Controller
             'role'      => 'sometimes|in:admin,farmer,driver',
             'is_active' => 'sometimes|boolean',
         ]);
+        
         if ($request->password) {
             $data['password'] = Hash::make($request->password);
         }
+        
         $user->update($data);
         return response()->json($user);
     }

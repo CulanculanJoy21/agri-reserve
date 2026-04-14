@@ -2397,109 +2397,115 @@ async function changePassword() {
 
 // ==================== NOTIFICATIONS ====================
 async function loadNotifications() {
-  const [reservations, deliveries, maintenance, equipment, settings] = await Promise.all([
+  // 🟢 SAFETY FIX: Use allSettled so one 500 error doesn't kill the whole app
+  const results = await Promise.allSettled([
     API.get('/reservations'),
     API.get('/deliveries'),
     API.get('/maintenance'),
     API.get('/equipment'),
-    API.get('/settings'),
+    API.get('/settings')
   ]);
+
+  // Extract values safely. If a request failed, we default to an empty array/object
+  const reservations = results[0].status === 'fulfilled' ? (results[0].value || []) : [];
+  const deliveries   = results[1].status === 'fulfilled' ? (results[1].value || []) : [];
+  const maintenance  = results[2].status === 'fulfilled' ? (results[2].value || []) : [];
+  const equipment    = results[3].status === 'fulfilled' ? (results[3].value || []) : [];
+  const settings     = results[4].status === 'fulfilled' ? (results[4].value || {}) : {};
 
   const notifs    = [];
   const alertDays = parseInt(settings?.maintenance_alert_days) || 30;
-  const today    = new Date();
+  const today     = new Date();
   today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
+  const tomorrow  = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
- 
+
+  // 1. Due Date Alerts (Overdue, Today, Tomorrow)
   (reservations || [])
     .filter(r => ['approved', 'assigned'].includes(r.status))
     .forEach(r => {
       if (!r.end_date) return;
       const endDate = new Date(r.end_date);
       endDate.setHours(0, 0, 0, 0);
- 
+
       const equipName = r.equipment?.equipment_name || 'Equipment';
-      const farmerName= r.farmer?.name || 'Farmer';
-      const key       = `due-${r.reservation_id}`;
- 
+      const farmerName = r.farmer?.name || 'Farmer';
+      const key = `due-${r.reservation_id}`;
+
       if (endDate < today) {
-        // Overdue
         const daysOver = Math.floor((today - endDate) / 86400000);
         notifs.push({
           key,
-          text:   `⚠️ OVERDUE: ${equipName} borrowed by ${farmerName} is ${daysOver} day${daysOver>1?'s':''} overdue!`,
+          text: `⚠️ OVERDUE: ${equipName} borrowed by ${farmerName} is ${daysOver} day${daysOver > 1 ? 's' : ''} overdue!`,
           unread: true,
           action: `viewReservation(${r.reservation_id})`
         });
       } else if (endDate.getTime() === today.getTime()) {
-        // Due today
         notifs.push({
           key,
-          text:   `🔔 DUE TODAY: ${equipName} borrowed by ${farmerName} must be returned today!`,
+          text: `🔔 DUE TODAY: ${equipName} borrowed by ${farmerName} must be returned today!`,
           unread: true,
           action: `viewReservation(${r.reservation_id})`
         });
       } else if (endDate.getTime() === tomorrow.getTime()) {
-        // Due tomorrow
         notifs.push({
           key,
-          text:   `📅 Due tomorrow: ${equipName} borrowed by ${farmerName} is due back tomorrow`,
+          text: `📅 Due tomorrow: ${equipName} borrowed by ${farmerName} is due back tomorrow`,
           unread: true,
           action: `viewReservation(${r.reservation_id})`
         });
       }
     });
 
-   // Pending reservations
+  // 2. Pending Reservations Alert
   (reservations || []).filter(r => r.status === 'pending').forEach(r => {
     notifs.push({
-      key:    `res-${r.reservation_id}`,
-      text:   `New reservation from ${r.farmer?.name || 'a farmer'}`,
+      key: `res-${r.reservation_id}`,
+      text: `New reservation from ${r.farmer?.name || 'a farmer'}`,
       unread: true,
       action: `viewReservation(${r.reservation_id})`
     });
   });
 
-  // In-transit deliveries
+  // 3. In-Transit Deliveries Alert
   (deliveries || []).filter(d => d.delivery_status === 'in_transit').forEach(d => {
     notifs.push({
-      key:    `del-${d.delivery_id}`,
-      text:   `Delivery #D${d.delivery_id} is in transit`,
+      key: `del-${d.delivery_id}`,
+      text: `Delivery #D${d.delivery_id} is in transit`,
       unread: true,
-      action: `navigate('deliveries')`
+      action: `Maps('deliveries')`
     });
   });
 
-  // Maintenance due alerts
+  // 4. Maintenance Alerts
   (equipment || []).forEach(e => {
-    const records   = (maintenance || []).filter(m => m.equipment_id === e.equipment_id);
+    const records = (maintenance || []).filter(m => m.equipment_id === e.equipment_id);
     if (records.length === 0) {
       notifs.push({
-        key:    `maint-never-${e.equipment_id}`,
-        text:   `⚠️ ${e.equipment_name} has never been maintained`,
+        key: `maint-never-${e.equipment_id}`,
+        text: `⚠️ ${e.equipment_name} has never been maintained`,
         unread: true,
-        action: `navigate('maintenance')`
+        action: `Maps('maintenance')`
       });
     } else {
-      const lastDate  = new Date(records[0].maintenance_date);
+      const lastDate = new Date(records[0].maintenance_date);
       const daysSince = Math.floor((Date.now() - lastDate) / 86400000);
       if (daysSince >= alertDays) {
         notifs.push({
-          key:    `maint-due-${e.equipment_id}`,
-          text:   `⚠️ ${e.equipment_name} needs maintenance (${daysSince} days ago)`,
+          key: `maint-due-${e.equipment_id}`,
+          text: `⚠️ ${e.equipment_name} needs maintenance (${daysSince} days ago)`,
           unread: true,
-          action: `navigate('maintenance')`
+          action: `Maps('maintenance')`
         });
       }
     }
   });
-    // Filter out dismissed notifications
+
+  // Final rendering logic
   const dismissed = getDismissed();
   const visible = notifs.filter(n => !dismissed.includes(n.key));
   window._notifs = notifs;
 
-  // Update badge count
   const unreadCount = visible.filter(n => n.unread).length;
   const badge = document.getElementById('notif-count');
   if (badge) {
@@ -2507,7 +2513,6 @@ async function loadNotifications() {
     badge.style.display = unreadCount > 0 ? 'flex' : 'none';
   }
 
-  // Render notifications
   const list = document.getElementById('notif-list');
   if (!list) return;
   list.innerHTML = visible.length
@@ -2517,16 +2522,41 @@ async function loadNotifications() {
         <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="clearAllNotifs()">Clear all</span>
       </div>
       ${visible.map(n => `
-        <div class="notif-item ${n.unread ? 'unread' : ''}"
-          style="display:flex;justify-content:space-between;align-items:center">
+        <div class="notif-item ${n.unread ? 'unread' : ''}" style="display:flex;justify-content:space-between;align-items:center">
           <span onclick="toggleNotifs(); ${n.action}" style="flex:1;cursor:pointer">${n.text}</span>
           <span onclick="dismissNotif('${n.key}')" style="color:var(--text3);padding:0 8px;font-size:16px;cursor:pointer">✕</span>
         </div>`).join('')}
     `
     : '<div class="notif-item">No new notifications</div>';
+window._notifs = notifs;
 
-  // Store notifs globally for dismiss
-  window._notifs = notifs;
+  // Update the UI Badge
+  const unreadCount = visible.filter(n => n.unread).length;
+  const badge = document.getElementById('notif-count');
+  if (badge) {
+    badge.textContent = unreadCount;
+    badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+  }
+
+  // Render the list into the dropdown
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+
+  list.innerHTML = visible.length
+    ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--text3)">${unreadCount} unread</span>
+        <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="clearAllNotifs()">Clear all</span>
+      </div>
+      ${visible.map(n => `
+        <div class="notif-item ${n.unread ? 'unread' : ''}" style="display:flex;justify-content:space-between;align-items:center">
+          <div onclick="toggleNotifs(); ${n.action}" style="flex:1;cursor:pointer;padding-right:8px">
+            ${n.text}
+          </div>
+          <span onclick="dismissNotif('${n.key}')" style="color:var(--text3);padding:4px 8px;font-size:16px;cursor:pointer;transition:color 0.2s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">✕</span>
+        </div>`).join('')}
+    `
+    : '<div class="notif-item" style="text-align:center;color:var(--text3);padding:20px">No new notifications</div>';
 }
 
 // ==================== LOGIN ====================
