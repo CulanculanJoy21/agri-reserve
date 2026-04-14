@@ -28,7 +28,8 @@ class ReservationController extends Controller
         return response()->json($query->latest()->get());
     }
 
-    // 🟢 ADDED: SHOW METHOD (Fixes the "Eye" button 500 error)
+    // --- SHOW INDIVIDUAL RESERVATION ---
+    // Fixes the "Eye" icon/Details button crash
     public function show($id)
     {
         $res = Reservation::with(['farmer', 'equipment', 'delivery.driver', 'feedback'])
@@ -105,19 +106,21 @@ class ReservationController extends Controller
         return response()->json($res);
     }
 
-    // 🟢 ADDED: CANCEL METHOD (Fixes the Cancel button 500 error)
+    // --- CANCEL RESERVATION ---
+    // Fixes the 500 error on the Cancel button
     public function cancel($id)
     {
         $res = Reservation::with('equipment')->findOrFail($id);
         
-        // Safety check
+        // Safety check: Don't cancel if already completed or rejected
         if (!in_array($res->status, ['pending', 'approved', 'assigned'])) {
             return response()->json(['message' => 'Cannot cancel this reservation'], 422);
         }
 
-        // 🟢 CHANGE: Use 'cancelled' instead of 'rejected'
+        // Set status to cancelled
         $res->update(['status' => 'cancelled']);
 
+        // Return equipment stock back to inventory
         if ($res->equipment) {
             $res->equipment->increment('available_quantity', $res->reserved_quantity);
             if ($res->equipment->status === 'reserved') {
@@ -162,12 +165,12 @@ class ReservationController extends Controller
         return response()->json($res);
     }
 
-    // 🟢 ADDED: DESTROY METHOD (To allow deleting old records)
+    // --- DELETE RECORD ---
     public function destroy($id)
     {
         $res = Reservation::findOrFail($id);
-        if (!in_array($res->status, ['completed', 'rejected'])) {
-            return response()->json(['message' => 'Can only delete completed or rejected reservations'], 422);
+        if (!in_array($res->status, ['completed', 'rejected', 'cancelled'])) {
+            return response()->json(['message' => 'Cannot delete active reservations'], 422);
         }
         $res->delete();
         return response()->json(['message' => 'Deleted']);
