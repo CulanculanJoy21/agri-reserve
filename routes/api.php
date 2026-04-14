@@ -90,9 +90,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // The mobile phone calls this to SAVE location
     Route::post('/driver/update-location', [UserController::class, 'updateLocation']);
     
-    // The dashboard calls this to SHOW markers
-    Route::get('/drivers/locations',       [UserController::class, 'allDriverLocations']);
-
+    // The Map calls this to GET active drivers
+    Route::get('/drivers/locations', [UserController::class, 'getActiveDriverLocations']);
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {
         Route::get('/users',         [UserController::class, 'index']);

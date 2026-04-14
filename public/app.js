@@ -835,6 +835,12 @@ async function viewReservation(id) {
   if (!r) return;
   const delivery = r.delivery;
   const feedback = r.feedback;
+
+  // 🟢 NEW: Calculate the Grand Total
+  const equipTotal = parseFloat(r.total_rental_cost) || 0;
+  const deliveryFee = delivery ? parseFloat(delivery.delivery_fee) : 0;
+  const grandTotal = equipTotal + deliveryFee;
+
   openModal(`Reservation #R${id} Details`, `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card" style="background:var(--bg3)">
@@ -845,34 +851,36 @@ async function viewReservation(id) {
         </div>
         <div style="margin-top:8px"><span style="color:var(--text3);font-size:12px">Address</span><div>${r.farmer ? r.farmer.address : '—'}</div></div>
       </div>
+
       <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">Equipment Info</div>
-        <div style="display:flex;gap:12px;align-items:center">
-          <span style="font-size:40px">⚙️</span>
+        <div class="section-divider">Rental Calculation</div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+          <span style="font-size:32px">⚙️</span>
           <div>
             <strong>${r.equipment ? r.equipment.equipment_name : '—'}</strong>
-            <div style="font-size:12px;color:var(--text3)">${r.equipment ? r.equipment.category : ''}</div>
-            <div style="color:var(--accent);font-weight:700">₱${r.equipment ? r.equipment.rental_price.toLocaleString() : '0'}/day</div>
+            <div style="font-size:12px;color:var(--text3)">${r.total_days} days × ${r.reserved_quantity || 1} unit(s)</div>
           </div>
         </div>
-      </div>
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">Reservation Details</div>
+        
         <div class="form-row">
           <div><span style="color:var(--text3);font-size:12px">Start Date</span><div>${formatDate(r.start_date)}</div></div>
           <div><span style="color:var(--text3);font-size:12px">End Date</span><div>${formatDate(r.end_date)}</div></div>
         </div>
-        <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">${statusBadge(r.status)} ${statusBadge(r.reservation_type)}</div>
+
+        <div style="margin-top:12px; padding:10px; background:rgba(74, 222, 128, 0.05); border-radius:8px; border:1px dashed var(--accent)">
+           <div style="display:flex; justify-content:space-between; align-items:center">
+              <span style="color:var(--text3); font-size:12px">Equipment Subtotal:</span>
+              <strong style="color:var(--accent)">₱${equipTotal.toLocaleString()}</strong>
+           </div>
+        </div>
       </div>
+
       ${delivery ? `
         <div class="card" style="background:var(--bg3)">
           <div class="section-divider">Delivery Info</div>
           <div class="form-row">
             <div><span style="color:var(--text3);font-size:12px">Distance</span><div>${delivery.distance_km} km</div></div>
-            <div><span style="color:var(--text3);font-size:12px">Rate</span><div>₱${delivery.price_per_km}/km</div></div>
-          </div>
-          <div style="margin-top:8px"><span style="color:var(--text3);font-size:12px">Delivery Fee</span>
-            <div style="font-size:20px;font-weight:800;color:var(--accent)">₱${delivery.delivery_fee}</div>
+            <div><span style="color:var(--text3);font-size:12px">Delivery Fee</span><div style="color:var(--accent); font-weight:700">₱${deliveryFee.toLocaleString()}</div></div>
           </div>
           <div style="margin-top:8px"><span style="color:var(--text3);font-size:12px">Driver</span>
             <div>${delivery.driver ? delivery.driver.name : 'Unassigned'}</div>
@@ -880,6 +888,20 @@ async function viewReservation(id) {
           <div style="margin-top:8px">${statusBadge(delivery.delivery_status)}</div>
         </div>
       ` : ''}
+
+      <div class="card" style="background:linear-gradient(135deg, var(--bg3), #16212e); border: 1px solid var(--accent)">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <div>
+            <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px">Grand Total Amount</div>
+            <div style="font-size:24px; font-weight:800; color:var(--accent); font-family:var(--font-head)">₱${grandTotal.toLocaleString()}</div>
+          </div>
+          <div style="text-align:right">
+            ${statusBadge(r.status)}
+            <div style="font-size:10px; color:var(--text3); margin-top:4px">Includes Rental + Delivery</div>
+          </div>
+        </div>
+      </div>
+
       ${feedback ? `
         <div class="card" style="background:var(--bg3)">
           <div class="section-divider">Farmer Feedback</div>

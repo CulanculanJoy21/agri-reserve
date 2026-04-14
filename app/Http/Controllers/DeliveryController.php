@@ -108,6 +108,24 @@ class DeliveryController extends Controller
             ->find($delivery->delivery_id) // Match your migration's column name
         );
     }
+    public function updateDriverLocation(Request $request)
+    {
+        $request->validate([
+            'lat' => 'required|numeric',
+            'lng' => 'required|numeric',
+        ]);
+
+        $user = $request->user(); // Gets the logged-in driver
+
+        // Update the driver's current position in the users table
+        $user->update([
+            'current_lat' => $request->lat,
+            'current_lng' => $request->lng,
+            'location_updated_at' => now(), // Good for showing "Last seen 2m ago"
+        ]);
+
+        return response()->json(['message' => 'Location updated successfully']);
+    }
 
     // ── DELETE ─────────────────────────────────────────────
     public function destroy($id)
