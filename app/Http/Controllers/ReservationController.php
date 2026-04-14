@@ -36,9 +36,10 @@ class ReservationController extends Controller
 
     public function store(Request $request)
     {
+        // 1. Validate: Look for 'reserved_quantity' (matching your SerializedName in Android)
         $data = $request->validate([
             'equipment_id'      => 'required|exists:equipment,equipment_id',
-            'quantity'          => 'required|integer|min:1', // 🟢 Syncs with Android 'quantity'
+            'reserved_quantity' => 'required|integer|min:1', 
             'start_date'        => 'required|date',
             'end_date'          => 'required|date|after_or_equal:start_date',
             'reservation_type'  => 'required|in:pickup,delivery',
@@ -49,21 +50,23 @@ class ReservationController extends Controller
             'user_id'           => 'nullable|exists:users,id',
         ]);
 
-        // Set User ID logic
+        // 2. Set User ID
         $data['user_id'] = ($request->user()->role === 'admin') 
             ? ($request->input('user_id') ?? $request->user()->id) 
             : $request->user()->id;
 
         $data['status'] = 'pending';
+        
+        // 3. Find Equipment using the correct primary key
         $equip = Equipment::where('equipment_id', $data['equipment_id'])->firstOrFail();
-        $qtyRequested = $data['quantity'];
+        $qtyRequested = $data['reserved_quantity'];
 
-        // 🟢 Check availability
+        // 4. Check availability
         if ($equip->available_quantity < $qtyRequested) {
             return response()->json(['message' => "Only {$equip->available_quantity} units available"], 422);
         }
 
-        // Calculate Costs
+        // 5. Calculate Costs
         $startDate = Carbon::parse($data['start_date']);
         $endDate   = Carbon::parse($data['end_date']);
         $totalDays = $endDate->diffInDays($startDate) + 1;
@@ -71,14 +74,14 @@ class ReservationController extends Controller
         $data['total_days']        = $totalDays;
         $data['total_rental_cost'] = $totalDays * ($equip->rental_price * $qtyRequested);
 
-        // 🟢 Deduct requested quantity
+        // 6. Deduct stock
         $equip->decrement('available_quantity', $qtyRequested);
 
-        // Update status if stock is empty
         if ($equip->available_quantity <= 0) {
             $equip->update(['status' => 'reserved']);
         }
 
+        // 7. Create Reservation
         $res = Reservation::create($data);
 
         return response()->json(
@@ -118,9 +121,9 @@ class ReservationController extends Controller
         $res = Reservation::with('equipment')->findOrFail($id);
         $res->update(['status' => 'rejected']);
 
-        // 🟢 Restore exact quantity
         if ($res->equipment) {
-            $res->equipment->increment('available_quantity', $res->quantity);  
+            // Restore using correct DB column name
+            $res->equipment->increment('available_quantity', $res->reserved_quantity); 
             if ($res->equipment->status === 'reserved') {
                 $res->equipment->update(['status' => 'available']);
             }
@@ -137,9 +140,8 @@ class ReservationController extends Controller
         }
         $res->update(['status' => 'rejected']);
 
-        // 🟢 Restore exact quantity
         if ($res->equipment) {
-            $res->equipment->increment('available_quantity', $res->quantity);
+            $res->equipment->increment('available_quantity', $res->reserved_quantity);
             if ($res->equipment->status === 'reserved') {
                 $res->equipment->update(['status' => 'available']);
             }
@@ -157,8 +159,8 @@ class ReservationController extends Controller
         $returnDate = Carbon::now();
         $actualDays = $returnDate->diffInDays($startDate) + 1;
         
-        // 🟢 Cost logic: Days * Price * Quantity
-        $totalCost = $actualDays * ($equip->rental_price * $res->quantity);
+        // Calculate based on reserved_quantity
+        $totalCost = $actualDays * ($equip->rental_price * $res->reserved_quantity);
 
         $res->update([
             'status'            => 'completed',
@@ -168,8 +170,7 @@ class ReservationController extends Controller
         ]);
 
         if ($equip) {
-            // 🟢 Increment by the reserved amount
-            $equip->increment('available_quantity', $res->quantity);
+            $equip->increment('available_quantity', $res->reserved_quantity);
             if ($equip->status === 'reserved') {
                 $equip->update(['status' => 'available']);
             }
