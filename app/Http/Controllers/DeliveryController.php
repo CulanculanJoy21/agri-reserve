@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Delivery;
@@ -39,12 +40,10 @@ class DeliveryController extends Controller
             'delivery_date'  => 'nullable|date',
         ]);
 
-        // 1. Find the reservation to get its address
         $res = Reservation::where('reservation_id', $data['reservation_id'])->firstOrFail();
         
         $deliveryFee = $data['distance_km'] * $data['price_per_km'];
 
-        // 2. Save the delivery AND the address info
         $delivery = Delivery::updateOrCreate(
             ['reservation_id' => $data['reservation_id']],
             [
@@ -70,46 +69,54 @@ class DeliveryController extends Controller
         );
     }
 
-    // ── UPDATE STATUS ──────────────────────────────────────
+    // ── UPDATE STATUS (Fixed the $res Error) ────────────────
     public function update(Request $request, $id)
     {
-        $delivery = Delivery::findOrFail($id);
+        // 1. Find delivery and load reservation relationship
+        $delivery = Delivery::with('reservation')->findOrFail($id);
+        $res = $delivery->reservation; // 🟢 FIX: This defines $res so line 85+ works
+
         $newDeliveryStatus = $request->input('delivery_status', $delivery->delivery_status);
 
-        $delivery->fill([
+        // Calculate fee safely
+        $dist = $request->input('distance_km', $delivery->distance_km);
+        $price = $request->input('price_per_km', $delivery->price_per_km);
+        $newFee = $dist * $price;
+
+        $delivery->update([
             'driver_id'       => $request->input('driver_id', $delivery->driver_id),
-            'distance_km'     => $request->input('distance_km', $delivery->distance_km),
-            'price_per_km'    => $request->input('price_per_km', $delivery->price_per_km),
-            'delivery_fee'    => $request->input('distance_km', $delivery->distance_km) * $request->input('price_per_km', $delivery->price_per_km),
+            'distance_km'     => $dist,
+            'price_per_km'    => $price,
+            'delivery_fee'    => $newFee,
             'delivery_status' => $newDeliveryStatus,
             'delivery_date'   => $request->input('delivery_date', $delivery->delivery_date),
-            'delivery_address' => $res->delivery_address, // 👈 This ensures the address isn't blank
-            'latitude'         => $res->latitude,
-            'longitude'        => $res->longitude,
+            // 🟢 These now work because $res is defined above
+            'delivery_address' => $res ? $res->delivery_address : $delivery->delivery_address,
+            'latitude'         => $res ? $res->latitude : $delivery->latitude,
+            'longitude'        => $res ? $res->longitude : $delivery->longitude,
         ]);
 
-        $delivery->save();
-        $delivery->load('reservation.equipment');
-
-        // Reservation logic stays the same
+        // Logic for Reservation Status
         if ($newDeliveryStatus === 'delivered') {
-            if ($delivery->reservation) {
-                $delivery->reservation->update(['status' => 'completed']);
-                if ($delivery->reservation->equipment) {
-                    $delivery->reservation->equipment->update(['status' => 'available']);
+            if ($res) {
+                $res->update(['status' => 'completed']);
+                if ($res->equipment) {
+                    $res->equipment->update(['status' => 'available']);
                 }
             }
-        } elseif ($newDeliveryStatus === 'in_transit') {
-            if ($delivery->reservation) {
-                $delivery->reservation->update(['status' => 'assigned']);
+        } elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
+            // 🟢 Handle both 'shipping' (from Android) or 'in_transit'
+            if ($res) {
+                $res->update(['status' => 'assigned']);
             }
         }
 
         return response()->json(
             Delivery::with(['reservation.equipment', 'reservation.farmer', 'driver'])
-            ->find($delivery->delivery_id) // Match your migration's column name
+            ->find($delivery->delivery_id)
         );
     }
+
     public function updateDriverLocation(Request $request)
     {
         $request->validate([
@@ -117,19 +124,17 @@ class DeliveryController extends Controller
             'lng' => 'required|numeric',
         ]);
 
-        $user = $request->user(); // Gets the logged-in driver
+        $user = $request->user();
 
-        // Update the driver's current position in the users table
         $user->update([
             'current_lat' => $request->lat,
             'current_lng' => $request->lng,
-            'location_updated_at' => now(), // Good for showing "Last seen 2m ago"
+            'location_updated_at' => now(),
         ]);
 
         return response()->json(['message' => 'Location updated successfully']);
     }
 
-    // ── DELETE ─────────────────────────────────────────────
     public function destroy($id)
     {
         Delivery::findOrFail($id)->delete();
