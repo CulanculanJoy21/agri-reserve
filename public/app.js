@@ -452,8 +452,11 @@ pages.equipment = async function (filter = 'all') {
                </span>
             </div>
 
-            <div class="equip-meta" style="margin-top:10px">
+            <div class="equip-meta" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
               <span class="equip-price">₱${e.rental_price.toLocaleString()}/day</span>
+              <span style="font-size:12px;color:${(e.available_quantity||1) > 0 ? 'var(--accent)' : 'var(--red)'}">
+                ${e.available_quantity || 0}/${e.quantity || 1} available
+              </span>
             </div>
             <p style="font-size:12px; color:var(--text3); margin-top:6px; line-height:1.4">${e.description || ''}</p>
             
@@ -501,6 +504,16 @@ function showAddEquipment() {
         </select>
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Quantity</label>
+        <input class="form-control" type="number" id="eq-qty"
+              placeholder="e.g. 3" min="1" value="1"/>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          How many units do you have?
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveEquipment()">Save Equipment</button>
@@ -510,36 +523,27 @@ function showAddEquipment() {
 
 async function saveEquipment() {
   const name = document.getElementById('eq-name').value.trim();
-  
-  // 🟢 Get the quantity from the new input field
-  const qtyInput = document.getElementById('eq-qty');
-  const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
-  
-  if (!name) { 
-    showToast('Equipment name is required', 'error'); 
-    return; 
-  }
-
+  if (!name) { showToast('Equipment name is required', 'error'); return; }
+  const qty = parseInt(document.getElementById('eq-qty')?.value) || 1;
   const result = await API.post('/equipment', {
     equipment_name: name,
     category:       document.getElementById('eq-cat').value,
     description:    document.getElementById('eq-desc').value,
     rental_price:   parseFloat(document.getElementById('eq-price').value) || 0,
     location:       document.getElementById('eq-loc').value,
-    status:         document.getElementById('eq-status').value,
-    // 🟢 Send the new inventory data
+    status:         'available',
     quantity:       qty,
-    available_quantity: qty 
+    available_quantity: qty,
   });
-
   if (result && !result.message) {
     closeModal();
-    showToast(`Equipment added successfully with ${qty} units!`);
+    showToast('Equipment added successfully!');
     pages.equipment();
   } else {
     showToast(result?.message || 'Failed to save', 'error');
   }
 }
+ 
 
 async function showEditEquipment(id) {
   const e = await API.get(`/equipment/${id}`);
@@ -833,85 +837,176 @@ async function deleteReservation(id) {
 async function viewReservation(id) {
   const r = await API.get(`/reservations/${id}`);
   if (!r) return;
+ 
   const delivery = r.delivery;
   const feedback = r.feedback;
-
-  // 🟢 NEW: Calculate the Grand Total
-  const equipTotal = parseFloat(r.total_rental_cost) || 0;
-  const deliveryFee = delivery ? parseFloat(delivery.delivery_fee) : 0;
-  const grandTotal = equipTotal + deliveryFee;
-
+ 
+  // Calculate rental cost
+  const startDate  = r.start_date ? new Date(r.start_date) : null;
+  const endDate    = r.end_date   ? new Date(r.end_date)   : null;
+  const totalDays  = r.total_days
+    || (startDate && endDate
+        ? Math.ceil((endDate - startDate) / (1000*60*60*24)) + 1
+        : 0);
+  const qty        = r.reserved_quantity || 1;
+  const pricePerDay= r.equipment?.rental_price || 0;
+  const rentalCost = r.total_rental_cost
+    || (totalDays * qty * pricePerDay);
+  const deliveryFee= delivery?.delivery_fee || 0;
+  const grandTotal = rentalCost + deliveryFee;
+ 
   openModal(`Reservation #R${id} Details`, `
-    <div style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+ 
+      <!-- Farmer Info -->
       <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">Farmer Info</div>
+        <div class="section-divider">👤 Farmer Info</div>
         <div class="form-row">
-          <div><span style="color:var(--text3);font-size:12px">Name</span><div><strong>${r.farmer ? r.farmer.name : '—'}</strong></div></div>
-          <div><span style="color:var(--text3);font-size:12px">Phone</span><div>${r.farmer ? r.farmer.phone : '—'}</div></div>
-        </div>
-        <div style="margin-top:8px"><span style="color:var(--text3);font-size:12px">Address</span><div>${r.farmer ? r.farmer.address : '—'}</div></div>
-      </div>
-
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">Rental Calculation</div>
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
-          <span style="font-size:32px">⚙️</span>
           <div>
-            <strong>${r.equipment ? r.equipment.equipment_name : '—'}</strong>
-            <div style="font-size:12px;color:var(--text3)">${r.total_days} days × ${r.reserved_quantity || 1} unit(s)</div>
+            <span style="color:var(--text3);font-size:11px">NAME</span>
+            <div><strong>${r.farmer?.name || '—'}</strong></div>
+          </div>
+          <div>
+            <span style="color:var(--text3);font-size:11px">PHONE</span>
+            <div>${r.farmer?.phone || '—'}</div>
           </div>
         </div>
-        
-        <div class="form-row">
-          <div><span style="color:var(--text3);font-size:12px">Start Date</span><div>${formatDate(r.start_date)}</div></div>
-          <div><span style="color:var(--text3);font-size:12px">End Date</span><div>${formatDate(r.end_date)}</div></div>
-        </div>
-
-        <div style="margin-top:12px; padding:10px; background:rgba(74, 222, 128, 0.05); border-radius:8px; border:1px dashed var(--accent)">
-           <div style="display:flex; justify-content:space-between; align-items:center">
-              <span style="color:var(--text3); font-size:12px">Equipment Subtotal:</span>
-              <strong style="color:var(--accent)">₱${equipTotal.toLocaleString()}</strong>
-           </div>
+        <div style="margin-top:8px">
+          <span style="color:var(--text3);font-size:11px">ADDRESS</span>
+          <div>${r.farmer?.address || '—'}</div>
         </div>
       </div>
-
+ 
+      <!-- Equipment Info -->
+      <div class="card" style="background:var(--bg3)">
+        <div class="section-divider">⚙️ Equipment Info</div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:36px">⚙️</span>
+          <div>
+            <strong style="font-size:16px">${r.equipment?.equipment_name || '—'}</strong>
+            <div style="font-size:12px;color:var(--text3)">${r.equipment?.category || ''}</div>
+            <div style="color:var(--accent);font-weight:700;margin-top:4px">
+              ₱${pricePerDay.toLocaleString()}/day
+            </div>
+          </div>
+          <div style="margin-left:auto;text-align:right">
+            <div style="font-size:11px;color:var(--text3)">QUANTITY</div>
+            <div style="font-size:22px;font-weight:800;color:var(--accent)">${qty}</div>
+            <div style="font-size:11px;color:var(--text3)">unit${qty > 1 ? 's' : ''}</div>
+          </div>
+        </div>
+      </div>
+ 
+      <!-- Reservation Details -->
+      <div class="card" style="background:var(--bg3)">
+        <div class="section-divider">📋 Reservation Details</div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div>
+            <span style="color:var(--text3);font-size:11px">START DATE</span>
+            <div><strong>${formatDate(r.start_date)}</strong></div>
+          </div>
+          <div>
+            <span style="color:var(--text3);font-size:11px">END DATE</span>
+            <div><strong>${formatDate(r.end_date)}</strong></div>
+          </div>
+          <div>
+            <span style="color:var(--text3);font-size:11px">DURATION</span>
+            <div><strong>${totalDays} day${totalDays > 1 ? 's' : ''}</strong></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          ${statusBadge(r.status)}
+          ${statusBadge(r.reservation_type)}
+        </div>
+        ${r.returned_at ? `
+          <div style="font-size:12px;color:var(--accent)">
+            ✓ Returned on ${formatDate(r.returned_at)}
+          </div>` : ''}
+      </div>
+ 
+      <!-- Rental Cost Breakdown -->
+      <div class="card" style="background:var(--bg3)">
+        <div class="section-divider">💰 Cost Breakdown</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+ 
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--text3)">Rental (${totalDays}d × ₱${pricePerDay.toLocaleString()} × ${qty} unit${qty>1?'s':''})</span>
+            <span><strong>₱${rentalCost.toLocaleString()}</strong></span>
+          </div>
+ 
+          ${delivery ? `
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--text3)">Delivery Fee (${delivery.distance_km}km × ₱${delivery.price_per_km})</span>
+            <span><strong>₱${deliveryFee.toLocaleString()}</strong></span>
+          </div>` : ''}
+ 
+          <div style="border-top:1px solid var(--border);padding-top:10px;
+                      display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;font-size:14px">GRAND TOTAL</span>
+            <span style="font-size:24px;font-weight:800;color:var(--accent)">
+              ₱${grandTotal.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </div>
+ 
+      <!-- Delivery Info -->
       ${delivery ? `
-        <div class="card" style="background:var(--bg3)">
-          <div class="section-divider">Delivery Info</div>
-          <div class="form-row">
-            <div><span style="color:var(--text3);font-size:12px">Distance</span><div>${delivery.distance_km} km</div></div>
-            <div><span style="color:var(--text3);font-size:12px">Delivery Fee</span><div style="color:var(--accent); font-weight:700">₱${deliveryFee.toLocaleString()}</div></div>
-          </div>
-          <div style="margin-top:8px"><span style="color:var(--text3);font-size:12px">Driver</span>
-            <div>${delivery.driver ? delivery.driver.name : 'Unassigned'}</div>
-          </div>
-          <div style="margin-top:8px">${statusBadge(delivery.delivery_status)}</div>
-        </div>
-      ` : ''}
-
-      <div class="card" style="background:linear-gradient(135deg, var(--bg3), #16212e); border: 1px solid var(--accent)">
-        <div style="display:flex; justify-content:space-between; align-items:center">
+      <div class="card" style="background:var(--bg3)">
+        <div class="section-divider">🚚 Delivery Info</div>
+        <div class="form-row" style="margin-bottom:8px">
           <div>
-            <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px">Grand Total Amount</div>
-            <div style="font-size:24px; font-weight:800; color:var(--accent); font-family:var(--font-head)">₱${grandTotal.toLocaleString()}</div>
+            <span style="color:var(--text3);font-size:11px">DRIVER</span>
+            <div>${delivery.driver?.name || 'Unassigned'}</div>
           </div>
-          <div style="text-align:right">
-            ${statusBadge(r.status)}
-            <div style="font-size:10px; color:var(--text3); margin-top:4px">Includes Rental + Delivery</div>
+          <div>
+            <span style="color:var(--text3);font-size:11px">DISTANCE</span>
+            <div>${delivery.distance_km} km</div>
           </div>
         </div>
-      </div>
-
+        ${delivery.delivery_address ? `
+        <div>
+          <span style="color:var(--text3);font-size:11px">DELIVER TO</span>
+          <div style="font-size:13px">📍 ${delivery.delivery_address}</div>
+        </div>` : ''}
+        <div style="margin-top:8px">${statusBadge(delivery.delivery_status)}</div>
+      </div>` : ''}
+ 
+      <!-- Feedback -->
       ${feedback ? `
-        <div class="card" style="background:var(--bg3)">
-          <div class="section-divider">Farmer Feedback</div>
-          <div class="stars">${'★'.repeat(feedback.rating)}${'☆'.repeat(5-feedback.rating)}</div>
-          <p style="font-size:13px;color:var(--text2);margin-top:8px">"${feedback.comments}"</p>
+      <div class="card" style="background:var(--bg3)">
+        <div class="section-divider">⭐ Farmer Feedback</div>
+        <div class="stars" style="font-size:20px;color:#facc15;margin-bottom:6px">
+          ${'★'.repeat(feedback.rating)}${'☆'.repeat(5-feedback.rating)}
         </div>
-      ` : ''}
+        <p style="font-size:13px;color:var(--text2);font-style:italic">
+          "${feedback.comments}"
+        </p>
+      </div>` : ''}
+ 
+      <!-- Return Equipment Button -->
+      ${(r.status === 'approved' || r.status === 'assigned') ? `
+      <button class="btn btn-primary" onclick="returnEquipment(${id})" style="width:100%">
+        ✓ Mark Equipment as Returned
+      </button>` : ''}
+ 
     </div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>
   `);
+}
+async function returnEquipment(id) {
+  if (!confirm('Mark this equipment as returned? This will complete the reservation.')) return;
+ 
+  const result = await API.put(`/reservations/${id}/return`, {});
+  if (result && result.status === 'completed') {
+    showToast('Equipment marked as returned! ✓');
+    closeModal();
+    pages.reservations();
+  } else {
+    showToast('Failed to mark as returned', 'error');
+  }
 }
 
 async function approveReservation(id) {
@@ -2312,6 +2407,49 @@ async function loadNotifications() {
 
   const notifs    = [];
   const alertDays = parseInt(settings?.maintenance_alert_days) || 30;
+  const today    = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+ 
+  (reservations || [])
+    .filter(r => ['approved', 'assigned'].includes(r.status))
+    .forEach(r => {
+      if (!r.end_date) return;
+      const endDate = new Date(r.end_date);
+      endDate.setHours(0, 0, 0, 0);
+ 
+      const equipName = r.equipment?.equipment_name || 'Equipment';
+      const farmerName= r.farmer?.name || 'Farmer';
+      const key       = `due-${r.reservation_id}`;
+ 
+      if (endDate < today) {
+        // Overdue
+        const daysOver = Math.floor((today - endDate) / 86400000);
+        notifs.push({
+          key,
+          text:   `⚠️ OVERDUE: ${equipName} borrowed by ${farmerName} is ${daysOver} day${daysOver>1?'s':''} overdue!`,
+          unread: true,
+          action: `viewReservation(${r.reservation_id})`
+        });
+      } else if (endDate.getTime() === today.getTime()) {
+        // Due today
+        notifs.push({
+          key,
+          text:   `🔔 DUE TODAY: ${equipName} borrowed by ${farmerName} must be returned today!`,
+          unread: true,
+          action: `viewReservation(${r.reservation_id})`
+        });
+      } else if (endDate.getTime() === tomorrow.getTime()) {
+        // Due tomorrow
+        notifs.push({
+          key,
+          text:   `📅 Due tomorrow: ${equipName} borrowed by ${farmerName} is due back tomorrow`,
+          unread: true,
+          action: `viewReservation(${r.reservation_id})`
+        });
+      }
+    });
 
    // Pending reservations
   (reservations || []).filter(r => r.status === 'pending').forEach(r => {
