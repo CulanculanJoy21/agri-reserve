@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class Reservation extends Model
 {
@@ -11,7 +12,7 @@ class Reservation extends Model
     protected $fillable = [
         'user_id', 
         'equipment_id', 
-        'reserved_quantity',
+        'reserved_quantity', // 🟢 Make sure this matches your DB column
         'start_date', 
         'end_date',
         'reservation_type', 
@@ -34,15 +35,24 @@ class Reservation extends Model
         'total_rental_cost' => 'decimal:2',
     ];
 
+    // --- RELATIONSHIPS ---
     public function farmer()   { return $this->belongsTo(User::class, 'user_id'); }
-    public function equipment(){ return $this->belongsTo(Equipment::class, 'equipment_id', 'equipment_id'); }
-    public function delivery() { return $this->hasOne(Delivery::class, 'reservation_id', 'reservation_id'); }
-    public function feedback() { return $this->hasOne(Feedback::class, 'reservation_id', 'reservation_id'); }
+    public function equipment() { return $this->belongsTo(Equipment::class, 'equipment_id', 'equipment_id'); }
+    public function delivery()  { return $this->hasOne(Delivery::class, 'reservation_id', 'reservation_id'); }
+    public function feedback()  { return $this->hasOne(Feedback::class, 'reservation_id', 'reservation_id'); }
 
-
+    // --- ACCESSORS ---
+    // 🟢 FIXED: Updated to use 'reserved_quantity' to prevent 500 error
     public function getRentalCostAttribute(): float
     {
-        $days = max(1, $this->start_date->diffInDays($this->end_date));
-        return $days * ($this->equipment->rental_price ?? 0);
+        if (!$this->start_date || !$this->end_date || !$this->equipment) {
+            return 0.00;
+        }
+
+        $start = Carbon::parse($this->start_date);
+        $end   = Carbon::parse($this->end_date);
+        $days  = max(1, $end->diffInDays($start) + 1);
+        
+        return $days * ($this->equipment->rental_price * ($this->reserved_quantity ?? 1));
     }
 }
