@@ -15,8 +15,8 @@ class Reservation extends Model
         'longitude', 'returned_at', 'total_days', 'total_rental_cost'
     ];
 
-    // 🟢 This makes "quantity" and "address" available to your JavaScript app.js
-    protected $appends = ['quantity', 'address'];
+    // These fields are sent automatically to your Web App and Android App
+    protected $appends = ['quantity', 'address', 'rental_total', 'shipping_fee', 'grand_total'];
 
     protected $casts = [
         'latitude'          => 'float',
@@ -24,7 +24,7 @@ class Reservation extends Model
         'start_date'        => 'date:Y-m-d',
         'end_date'          => 'date:Y-m-d',
         'returned_at'       => 'datetime', 
-        'total_rental_cost' => 'decimal:2',
+        'total_rental_cost' => 'float',
     ];
 
     public function farmer()    { return $this->belongsTo(User::class, 'user_id'); }
@@ -32,16 +32,39 @@ class Reservation extends Model
     public function delivery()  { return $this->hasOne(Delivery::class, 'reservation_id', 'reservation_id'); }
     public function feedback()  { return $this->hasOne(Feedback::class, 'reservation_id', 'reservation_id'); }
 
-    // 🟢 Aliases so your Web App's "Eye" and "Assign" buttons work again
+    // --- ALIASES FOR WEB APP COMPATIBILITY ---
     public function getQuantityAttribute() { return $this->reserved_quantity; }
     public function getAddressAttribute()  { return $this->delivery_address; }
 
-    public function getRentalCostAttribute(): float
+    // --- FINANCIAL BREAKDOWN METHODS ---
+
+    /**
+     * Equipment Rental Cost (Days * Price * Qty)
+     */
+    public function getRentalTotalAttribute()
     {
-        if (!$this->start_date || !$this->end_date || !$this->equipment) return 0.00;
+        // Use the column value if it exists, otherwise calculate it
+        if ($this->total_rental_cost > 0) return (float) $this->total_rental_cost;
+        
         $start = Carbon::parse($this->start_date);
         $end   = Carbon::parse($this->end_date);
         $days  = max(1, $end->diffInDays($start) + 1);
-        return $days * ($this->equipment->rental_price * ($this->reserved_quantity ?? 1));
+        return (float) ($days * ($this->equipment->rental_price ?? 0) * ($this->reserved_quantity ?? 1));
+    }
+
+    /**
+     * Shipping/Delivery Fee from relationship
+     */
+    public function getShippingFeeAttribute()
+    {
+        return (float) ($this->delivery->delivery_fee ?? 0);
+    }
+
+    /**
+     * Final Grand Total
+     */
+    public function getGrandTotalAttribute()
+    {
+        return $this->getRentalTotalAttribute() + $this->getShippingFeeAttribute();
     }
 }

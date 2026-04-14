@@ -67,14 +67,31 @@ const API = {
 // ==================== HELPERS ====================
 function statusBadge(status) {
   const map = {
+    // Equipment Status
     available: 'badge-green', reserved: 'badge-orange', maintenance: 'badge-red',
-    pending: 'badge-yellow', approved: 'badge-green', assigned:   'badge-blue', rejected: 'badge-red',
-    completed: 'badge-blue', in_transit: 'badge-orange', delivered: 'badge-green',
+    
+    // Reservation Status
+    pending: 'badge-yellow', 
+    approved: 'badge-green', 
+    assigned: 'badge-blue', 
+    rejected: 'badge-red',
+    cancelled: 'badge-gray', // 🟢 ADDED: Neutral color for user-initiated cancellation
+    completed: 'badge-blue', 
+    
+    // Delivery Status
+    in_transit: 'badge-orange', delivered: 'badge-green',
+    
+    // Roles
     farmer: 'badge-blue', driver: 'badge-purple', admin: 'badge-gray',
+    
+    // Types
     pickup: 'badge-blue', delivery: 'badge-purple'
   };
+
   if (!status) return '';
-  return `<span class="badge ${map[status] || 'badge-gray'}">${status.replace('_', ' ')}</span>`;
+  
+  // .toUpperCase() makes the badges look more professional like a dashboard
+  return `<span class="badge ${map[status] || 'badge-gray'}">${status.replace('_', ' ').toUpperCase()}</span>`;
 }
 
 function formatDate(d) {
@@ -841,24 +858,18 @@ async function viewReservation(id) {
   const delivery = r.delivery;
   const feedback = r.feedback;
  
-  // Calculate rental cost
-  const startDate  = r.start_date ? new Date(r.start_date) : null;
-  const endDate    = r.end_date   ? new Date(r.end_date)   : null;
-  const totalDays  = r.total_days
-    || (startDate && endDate
-        ? Math.ceil((endDate - startDate) / (1000*60*60*24)) + 1
-        : 0);
-  const qty        = r.reserved_quantity || 1;
-  const pricePerDay= r.equipment?.rental_price || 0;
-  const rentalCost = r.total_rental_cost
-    || (totalDays * qty * pricePerDay);
-  const deliveryFee= delivery?.delivery_fee || 0;
-  const grandTotal = rentalCost + deliveryFee;
+  // 🟢 PULLING DIRECTLY FROM LARAVEL VIRTUAL FIELDS (No math here!)
+  const totalDays   = r.total_days || 0;
+  const qty         = r.reserved_quantity || 1;
+  const pricePerDay = r.equipment?.rental_price || 0;
+  
+  const rentalCost  = r.rental_total;  // From getRentalTotalAttribute()
+  const deliveryFee = r.shipping_fee; // From getShippingFeeAttribute()
+  const grandTotal  = r.grand_total;  // From getGrandTotalAttribute()
  
   openModal(`Reservation #R${id} Details`, `
     <div style="display:flex;flex-direction:column;gap:14px">
  
-      <!-- Farmer Info -->
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">👤 Farmer Info</div>
         <div class="form-row">
@@ -877,7 +888,6 @@ async function viewReservation(id) {
         </div>
       </div>
  
-      <!-- Equipment Info -->
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">⚙️ Equipment Info</div>
         <div style="display:flex;gap:12px;align-items:center">
@@ -897,7 +907,6 @@ async function viewReservation(id) {
         </div>
       </div>
  
-      <!-- Reservation Details -->
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">📋 Reservation Details</div>
         <div class="form-row" style="margin-bottom:10px">
@@ -924,33 +933,31 @@ async function viewReservation(id) {
           </div>` : ''}
       </div>
  
-      <!-- Rental Cost Breakdown -->
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">💰 Cost Breakdown</div>
         <div style="display:flex;flex-direction:column;gap:8px">
  
           <div style="display:flex;justify-content:space-between;font-size:13px">
             <span style="color:var(--text3)">Rental (${totalDays}d × ₱${pricePerDay.toLocaleString()} × ${qty} unit${qty>1?'s':''})</span>
-            <span><strong>₱${rentalCost.toLocaleString()}</strong></span>
+            <span><strong>₱${rentalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></span>
           </div>
  
           ${delivery ? `
           <div style="display:flex;justify-content:space-between;font-size:13px">
             <span style="color:var(--text3)">Delivery Fee (${delivery.distance_km}km × ₱${delivery.price_per_km})</span>
-            <span><strong>₱${deliveryFee.toLocaleString()}</strong></span>
+            <span><strong>₱${deliveryFee.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></span>
           </div>` : ''}
  
           <div style="border-top:1px solid var(--border);padding-top:10px;
                       display:flex;justify-content:space-between;align-items:center">
             <span style="font-weight:700;font-size:14px">GRAND TOTAL</span>
             <span style="font-size:24px;font-weight:800;color:var(--accent)">
-              ₱${grandTotal.toLocaleString()}
+              ₱${grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
             </span>
           </div>
         </div>
       </div>
  
-      <!-- Delivery Info -->
       ${delivery ? `
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">🚚 Delivery Info</div>
@@ -972,7 +979,6 @@ async function viewReservation(id) {
         <div style="margin-top:8px">${statusBadge(delivery.delivery_status)}</div>
       </div>` : ''}
  
-      <!-- Feedback -->
       ${feedback ? `
       <div class="card" style="background:var(--bg3)">
         <div class="section-divider">⭐ Farmer Feedback</div>
@@ -984,7 +990,6 @@ async function viewReservation(id) {
         </p>
       </div>` : ''}
  
-      <!-- Return Equipment Button -->
       ${(r.status === 'approved' || r.status === 'assigned') ? `
       <button class="btn btn-primary" onclick="returnEquipment(${id})" style="width:100%">
         ✓ Mark Equipment as Returned

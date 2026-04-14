@@ -110,15 +110,15 @@ class ReservationController extends Controller
     {
         $res = Reservation::with('equipment')->findOrFail($id);
         
-        // Only allow cancellation if it hasn't been completed or rejected already
+        // Safety check
         if (!in_array($res->status, ['pending', 'approved', 'assigned'])) {
             return response()->json(['message' => 'Cannot cancel this reservation'], 422);
         }
 
-        $res->update(['status' => 'rejected']);
+        // 🟢 CHANGE: Use 'cancelled' instead of 'rejected'
+        $res->update(['status' => 'cancelled']);
 
         if ($res->equipment) {
-            // Restore stock based on reserved_quantity
             $res->equipment->increment('available_quantity', $res->reserved_quantity);
             if ($res->equipment->status === 'reserved') {
                 $res->equipment->update(['status' => 'available']);
