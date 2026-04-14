@@ -556,6 +556,13 @@ async function updateEquipment(id) {
     quantity:       parseInt(document.getElementById('eq-qty').value) || 1,
     available_quantity: parseInt(document.getElementById('eq-avail').value) || 0
   });
+  const qty = parseInt(document.getElementById('eq-qty').value);
+  const avail = parseInt(document.getElementById('eq-avail').value);
+
+  if (avail > qty) {
+      showToast('Available units cannot exceed total stock!', 'error');
+      return;
+  }
 
   closeModal();
 
@@ -587,13 +594,6 @@ function showEquipMaintenance(equipId) {
       <button class="btn btn-primary" onclick="saveEquipMaintenance(${equipId})">Log Maintenance</button>
     </div>
   `);
-}
-const qty = parseInt(document.getElementById('eq-qty').value);
-const avail = parseInt(document.getElementById('eq-avail').value);
-
-if (avail > qty) {
-    showToast('Available units cannot exceed total stock!', 'error');
-    return;
 }
 
 async function saveEquipMaintenance(equipId) {
