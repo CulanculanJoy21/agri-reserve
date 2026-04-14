@@ -545,30 +545,33 @@ async function showEditEquipment(id) {
   `);
 }
 async function updateEquipment(id) {
-  const result = await API.put(`/equipment/${id}`, {
-    equipment_name: document.getElementById('eq-name').value,
-    category:       document.getElementById('eq-cat').value,
-    description:    document.getElementById('eq-desc').value,
-    rental_price:   parseFloat(document.getElementById('eq-price').value) || 0,
-    location:       document.getElementById('eq-loc').value,
-    status:         document.getElementById('eq-status').value,
-    // 🟢 Send the updated inventory numbers
-    quantity:       parseInt(document.getElementById('eq-qty').value) || 1,
-    available_quantity: parseInt(document.getElementById('eq-avail').value) || 0
-  });
-  const qty = parseInt(document.getElementById('eq-qty').value);
-  const avail = parseInt(document.getElementById('eq-avail').value);
+  // 1. Get the values first
+  const qty = parseInt(document.getElementById('eq-qty').value) || 0;
+  const avail = parseInt(document.getElementById('eq-avail').value) || 0;
 
+  // 2. 🟢 Safety Check BEFORE the API call
   if (avail > qty) {
       showToast('Available units cannot exceed total stock!', 'error');
-      return;
+      return; // Stops the function here so no data is sent
   }
 
-  closeModal();
+  // 3. If everything is fine, send to the database
+  const result = await API.put(`/equipment/${id}`, {
+    equipment_name:     document.getElementById('eq-name').value,
+    category:           document.getElementById('eq-cat').value,
+    description:        document.getElementById('eq-desc').value,
+    rental_price:       parseFloat(document.getElementById('eq-price').value) || 0,
+    location:           document.getElementById('eq-loc').value,
+    status:             document.getElementById('eq-status').value,
+    quantity:           qty,
+    available_quantity: avail
+  });
 
+  // 4. Handle the result
+  closeModal();
   if (result) {
     showToast('Equipment updated successfully!');
-    pages.equipment(); // Refresh the list to show new stock levels
+    pages.equipment(); 
   } else {
     showToast('Failed to update equipment', 'error');
   }
