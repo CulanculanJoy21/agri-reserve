@@ -13,8 +13,20 @@ return new class extends Migration {
             $table->unsignedBigInteger('equipment_id');
             $table->date('start_date');
             $table->date('end_date');
+            $table->integer('total_days')->default(1); // Added this to be safe
+            $table->integer('reserved_quantity')->default(1); // Added this for your model math
             $table->enum('reservation_type', ['pickup', 'delivery'])->default('pickup');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'assigned', 'completed'])->default('pending');
+            
+            // 🟢 FIXED: Added 'cancelled' to the ENUM list
+            $table->enum('status', [
+                'pending', 
+                'approved', 
+                'rejected', 
+                'assigned', 
+                'completed', 
+                'cancelled'
+            ])->default('pending');
+
             $table->text('notes')->nullable();
             $table->string('delivery_address')->nullable();
             $table->decimal('latitude', 10, 8)->nullable();
@@ -26,5 +38,7 @@ return new class extends Migration {
         });
     }
 
-    public function down(): void { Schema::dropIfExists('reservations'); }
+    public function down(): void { 
+        Schema::dropIfExists('reservations'); 
+    }
 };
