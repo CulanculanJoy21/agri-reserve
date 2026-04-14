@@ -256,10 +256,24 @@ pages.dashboard = async function () {
   const resList    = reservations || [];
   const delList    = deliveries   || [];
 
-  const totalEquip = equipList.length;
-  const available  = equipList.filter(e => e.status === 'available').length;
-  const reserved   = equipList.filter(e => e.status === 'reserved').length;
-  const maintCount = equipList.filter(e => e.status === 'maintenance').length;
+  // --- UPDATED LOGIC FOR MULTI-UNIT INVENTORY ---
+  // We use .reduce to sum up all units across all equipment types
+  const totalUnitsCount = equipList.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+  const totalAvailCount = equipList.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
+  
+  // For the status bars, we still need the count of reserved and maintenance units
+  const reservedCount = equipList.reduce((sum, e) => {
+      // Logic: Reserved units = Total - Available (excluding maintenance)
+      if (e.status !== 'maintenance') {
+          return sum + ((parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0));
+      }
+      return sum;
+  }, 0);
+
+  const maintCount = equipList.reduce((sum, e) => {
+      return e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum;
+  }, 0);
+
   const pendingRes = resList.filter(r => r.status === 'pending').length;
   const totalRes   = resList.length;
   const inTransit  = delList.filter(d => d.delivery_status === 'in_transit').length;
@@ -277,9 +291,9 @@ pages.dashboard = async function () {
     <div class="stats-grid">
       <div class="stat-card green">
         <div class="stat-icon">⚙️</div>
-        <div class="stat-label">Total Equipment</div>
-        <div class="stat-value">${totalEquip}</div>
-        <div class="stat-change">${available} currently available</div>
+        <div class="stat-label">Total Equipment Units</div>
+        <div class="stat-value">${totalUnitsCount}</div>
+        <div class="stat-change">${totalAvailCount} currently available</div>
       </div>
       <div class="stat-card orange">
         <div class="stat-icon">📋</div>
@@ -295,9 +309,9 @@ pages.dashboard = async function () {
       </div>
       <div class="stat-card red">
         <div class="stat-icon">🔧</div>
-        <div class="stat-label">Under Maintenance</div>
+        <div class="stat-label">Units in Maintenance</div>
         <div class="stat-value">${maintCount}</div>
-        <div class="stat-change">${totalEquip - maintCount} units operational</div>
+        <div class="stat-change">${totalUnitsCount - maintCount} units operational</div>
       </div>
     </div>
 
@@ -317,25 +331,25 @@ pages.dashboard = async function () {
         </div>
       </div>
       <div class="card">
-        <div class="card-header"><span class="card-title">Equipment Status</span></div>
+        <div class="card-header"><span class="card-title">Stock Status</span></div>
         <div style="display:flex;flex-direction:column;gap:14px;padding-top:8px">
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
-              <span>Available</span><strong style="color:var(--accent)">${available}/${totalEquip}</strong>
+              <span>Available</span><strong style="color:var(--accent)">${totalAvailCount}/${totalUnitsCount}</strong>
             </div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${totalEquip ? Math.round(available/totalEquip*100) : 0}%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${totalUnitsCount ? Math.round(totalAvailCount/totalUnitsCount*100) : 0}%"></div></div>
           </div>
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
-              <span>Reserved</span><strong style="color:var(--orange)">${reserved}/${totalEquip}</strong>
+              <span>Reserved</span><strong style="color:var(--orange)">${reservedCount}/${totalUnitsCount}</strong>
             </div>
-            <div class="progress-bar"><div class="progress-fill orange" style="width:${totalEquip ? Math.round(reserved/totalEquip*100) : 0}%"></div></div>
+            <div class="progress-bar"><div class="progress-fill orange" style="width:${totalUnitsCount ? Math.round(reservedCount/totalUnitsCount*100) : 0}%"></div></div>
           </div>
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
-              <span>Maintenance</span><strong style="color:var(--red)">${maintCount}/${totalEquip}</strong>
+              <span>Maintenance</span><strong style="color:var(--red)">${maintCount}/${totalUnitsCount}</strong>
             </div>
-            <div class="progress-bar"><div class="progress-fill red" style="width:${totalEquip ? Math.round(maintCount/totalEquip*100) : 0}%"></div></div>
+            <div class="progress-bar"><div class="progress-fill red" style="width:${totalUnitsCount ? Math.round(maintCount/totalUnitsCount*100) : 0}%"></div></div>
           </div>
         </div>
       </div>
@@ -392,10 +406,21 @@ pages.equipment = async function (filter = 'all') {
   let list = [...equipment];
   if (filter !== 'all') list = list.filter(e => e.status === filter);
 
-  const all   = equipment.length;
-  const avail = equipment.filter(e => e.status === 'available').length;
-  const res   = equipment.filter(e => e.status === 'reserved').length;
-  const maint = equipment.filter(e => e.status === 'maintenance').length;
+  // --- UPDATED LOGIC: Summing up units across all equipment ---
+  const all   = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+  const avail = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
+  
+  // Logic for Reserved: Total Units - Available Units (excluding those in maintenance)
+  const res   = equipment.reduce((sum, e) => {
+      if (e.status !== 'maintenance') {
+          return sum + ((parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0));
+      }
+      return sum;
+  }, 0);
+  
+  const maint = equipment.reduce((sum, e) => {
+      return e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum;
+  }, 0);
 
   document.getElementById('content').innerHTML = `
     <div class="page-header">
@@ -403,23 +428,35 @@ pages.equipment = async function (filter = 'all') {
       <button class="btn btn-primary" onclick="showAddEquipment()">＋ Add Equipment</button>
     </div>
     <div class="tabs">
-      <button class="tab-btn ${filter==='all'?'active':''}" onclick="pages.equipment('all')">All (${all})</button>
+      <button class="tab-btn ${filter==='all'?'active':''}" onclick="pages.equipment('all')">All Units (${all})</button>
       <button class="tab-btn ${filter==='available'?'active':''}" onclick="pages.equipment('available')">Available (${avail})</button>
       <button class="tab-btn ${filter==='reserved'?'active':''}" onclick="pages.equipment('reserved')">Reserved (${res})</button>
-      <button class="tab-btn ${filter==='maintenance'?'active':''}" onclick="pages.equipment('maintenance')">Maintenance (${maint})</button>
+      <button class="tab-btn ${filter==='maintenance'?'active':''}" onclick="pages.equipment('maintenance')">In Shop (${maint})</button>
     </div>
     <div class="equipment-grid">
-      ${list.length ? list.map(e => `
+      ${list.length ? list.map(e => {
+        // Dynamic color for stock badge
+        const stockColor = e.available_quantity > 0 ? 'var(--accent)' : 'var(--red)';
+        
+        return `
         <div class="equip-card">
           <div class="equip-img">⚙️</div>
           <div class="equip-body">
             <div class="equip-name">${e.equipment_name}</div>
             <div class="equip-cat">${e.category} · ${e.location || '—'}</div>
-            <div>${statusBadge(e.status)}</div>
+            
+            <div style="display:flex; gap:8px; align-items:center; margin-top:5px">
+               ${statusBadge(e.status)}
+               <span class="badge" style="background:rgba(255,255,255,0.05); border:1px solid ${stockColor}; color:${stockColor}">
+                  Stock: ${e.available_quantity} / ${e.quantity}
+               </span>
+            </div>
+
             <div class="equip-meta" style="margin-top:10px">
               <span class="equip-price">₱${e.rental_price.toLocaleString()}/day</span>
             </div>
-            <p style="font-size:12px;color:var(--text3);margin-top:6px">${e.description || ''}</p>
+            <p style="font-size:12px; color:var(--text3); margin-top:6px; line-height:1.4">${e.description || ''}</p>
+            
             <div class="equip-actions">
               <button class="btn btn-ghost btn-sm" onclick="showEditEquipment(${e.equipment_id})">✏ Edit</button>
               <button class="btn btn-ghost btn-sm" onclick="showEquipMaintenance(${e.equipment_id})">🔧 Maintenance</button>
@@ -427,7 +464,7 @@ pages.equipment = async function (filter = 'all') {
             </div>
           </div>
         </div>
-      `).join('') : '<div class="empty-state"><div class="empty-icon">⚙️</div>No equipment found</div>'}
+      `}).join('') : '<div class="empty-state"><div class="empty-icon">⚙️</div>No equipment found</div>'}
     </div>
   `;
 };

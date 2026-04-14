@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="style.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
+<link rel="icon" type="image/png" href="{{ asset('favicon.jpg') }}">
 <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
 </head>
 <body>
