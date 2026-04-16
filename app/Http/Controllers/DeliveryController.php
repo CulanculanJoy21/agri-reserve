@@ -129,25 +129,29 @@ class DeliveryController extends Controller
     // ── LIVE LOCATION UPDATE (Called by Android GPS Service) ───────────────────────
     public function updateDriverLocation(Request $request)
     {
-        $request->validate([
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-        ]);
+        // 1. Support BOTH short (lat) and long (latitude) labels
+        $lat = $request->input('latitude') ?? $request->input('lat');
+        $lng = $request->input('longitude') ?? $request->input('lng');
 
-        $user = $request->user();
+        // 2. Only update if we actually have numbers
+        if (is_numeric($lat) && is_numeric($lng)) {
+            $request->user()->update([
+                'current_lat' => $lat,
+                'current_lng' => $lng,
+                'location_updated_at' => now(),
+            ]);
 
-        $user->update([
-            'current_lat' => $request->latitude,
-            'current_lng' => $request->longitude,
-            'location_updated_at' => now(),
-        ]);
+            return response()->json([
+                'message' => 'Location updated!',
+                'lat' => $lat,
+                'lng' => $lng
+            ]);
+        }
 
-        return response()->json(['message' => 'Location updated successfully']);
-    }
-
-    public function destroy($id)
-    {
-        Delivery::findOrFail($id)->delete();
-        return response()->json(['message' => 'Deleted']);
+        // 3. Fallback: Tell us what the server actually received
+        return response()->json([
+            'error' => 'Invalid or missing coordinates',
+            'received' => $request->all()
+        ], 400);
     }
 }
