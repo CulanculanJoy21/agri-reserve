@@ -859,15 +859,18 @@ window.calcDeliveryFee = function() {
         formulaEl.textContent = `Formula: ${km}km × ₱${price}/km`;
     }
 };
-function toggleNotifs() {
+window.toggleNotifs = function() {
     const dropdown = document.getElementById('notif-dropdown');
-    if (!dropdown) return;
-    dropdown.classList.toggle('open');
-    if (dropdown.classList.contains('open')) {
-        loadNotifications();
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+        // Refresh notifications when opened
+        if (dropdown.classList.contains('active') && typeof loadNotifications === 'function') {
+            loadNotifications();
+        }
+    } else {
+        console.error("Could not find 'notif-dropdown' element in HTML.");
     }
-}
-window.toggleNotifs = toggleNotifs;
+};
 
 window.updateNotifBadge = function(notifs) {
     const dismissed = window.getDismissed ? window.getDismissed() : [];
