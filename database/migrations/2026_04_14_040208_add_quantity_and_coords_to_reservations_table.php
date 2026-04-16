@@ -9,23 +9,18 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up(): void
+    public function up()
     {
         Schema::table('reservations', function (Blueprint $table) {
-            // We only add the quantity because latitude/longitude are already there
-            if (!Schema::hasColumn('reservations', 'reserved_quantity')) {
-                $table->integer('reserved_quantity')->default(1)->after('equipment_id');
-            }
+            // Change it to string so it accepts any status word we send
+            $table->string('status')->change(); 
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
+    public function down()
     {
         Schema::table('reservations', function (Blueprint $table) {
-            //
+            $table->enum('status', ['pending', 'approved', 'assigned', 'rejected', 'completed', 'cancelled'])->change();
         });
     }
 };
