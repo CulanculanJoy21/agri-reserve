@@ -1739,14 +1739,15 @@ pages.deliveries = async function () {
     initTrackingMap(activeDeliveries);
     loadDriverLocations(activeDeliveries);
  
-    // Auto-refresh every 10 seconds if drivers are active
-    trackingInterval = setInterval(() => {
-      loadDriverLocations(activeDeliveries);
-    }, 10000);
- 
-  }, 300);
-};
- 
+window.trackingInterval = setInterval(async () => {
+    if (currentPage !== 'deliveries') {
+        clearInterval(window.trackingInterval);
+        return;
+    }
+    
+    // 🟢 Update this to 10 minutes (600,000) so it matches your goal
+    await loadDriverLocations(); 
+}, 600000);
  
 // ── MAP INITIALIZATION ────────────────────────────────────────
 function initTrackingMap(activeDeliveries) {
