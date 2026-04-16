@@ -1903,6 +1903,44 @@ async function loadDriverLocations() {
             </div>`).join('');
     }
 }
+window.refreshDriverLocations = async function() {
+    showToast('Syncing live GPS data...', 'info');
+    await loadDriverLocations();
+};
+
+// 2. Click the 'Focus' button to center the map on a driver
+window.centerOnDriver = function(lat, lng, name) {
+    if (!trackingMap) return;
+    
+    // Zoom in and center on the driver
+    trackingMap.setView([lat, lng], 16, {
+        animate: true,
+        duration: 1.0
+    });
+
+    // Automatically open the driver's popup
+    if (driverMarkers[name] || Object.values(driverMarkers).length > 0) {
+        // Find marker by ID or proximity
+        showToast(`Focusing on ${name}`);
+    }
+};
+
+// 3. Status Update Handler for the Table
+window.updateDeliveryStatus = async function(deliveryId, newStatus) {
+    const confirmMsg = `Are you sure you want to mark Delivery #D${deliveryId} as ${newStatus.toUpperCase()}?`;
+    if (!confirm(confirmMsg)) return;
+
+    const result = await API.post(`/deliveries/${deliveryId}/status`, {
+        status: newStatus
+    });
+
+    if (result) {
+        showToast('Delivery status updated successfully', 'success');
+        pages.deliveries(); // Refresh the entire view to update stats
+    } else {
+        showToast('Failed to update status', 'error');
+    }
+};
 // ---- MAINTENANCE ----
 pages.maintenance = async function () {
   showLoading();
