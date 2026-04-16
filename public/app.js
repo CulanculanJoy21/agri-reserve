@@ -1735,13 +1735,24 @@ function initTrackingMap(activeDeliveries) {
  
 // ── LOAD DRIVER LOCATIONS ─────────────────────────────────────
 async function loadDriverLocations(activeDeliveries) {
+    // 1. Fetch the drivers FIRST
     const drivers = await API.get('/drivers/locations');
     const driverList = document.getElementById('driver-list');
     const badge = document.querySelector('.tracking-badge');
 
     if (!drivers || !trackingMap) return;
 
-    // 1. Update the "Live" badge at the top
+    // 2. 🟢 GHOST CLEANUP: Remove drivers from map if they aren't in the server response
+    // This ensures Jade Amora vanishes if he hasn't updated his location recently.
+    const serverIds = drivers.map(d => d.id.toString());
+    Object.keys(driverMarkers).forEach(id => {
+        if (!serverIds.includes(id)) {
+            trackingMap.removeLayer(driverMarkers[id]); // Remove from map
+            delete driverMarkers[id]; // Remove from memory
+        }
+    });
+
+    // 3. Update the "Live" badge at the top
     if (badge) {
         if (drivers.length > 0) {
             badge.style.display = 'flex';
@@ -1751,29 +1762,20 @@ async function loadDriverLocations(activeDeliveries) {
         }
     }
 
-    // 2. Handle Empty State
+    // 4. Handle Empty State
     if (drivers.length === 0) {
         if (driverList) {
-            driverList.innerHTML = `
-                <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
-                    No drivers currently active
-                </div>`;
+            driverList.innerHTML = `<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No drivers currently active</div>`;
         }
-        // Remove old driver markers if they go offline
-        Object.keys(driverMarkers).forEach(id => {
-            trackingMap.removeLayer(driverMarkers[id]);
-            delete driverMarkers[id];
-        });
         return;
     }
 
-    // 3. Update or Create Driver Markers
+    // 5. Update or Create Driver Markers
     drivers.forEach((driver, index) => {
         const lat = parseFloat(driver.current_lat);
         const lng = parseFloat(driver.current_lng);
         if (!lat || !lng) return;
 
-        // Slight offset to prevent overlapping icons
         const offsetLat = lat + (index * 0.0002);
         const offsetLng = lng + (index * 0.0002);
 
@@ -1815,7 +1817,7 @@ async function loadDriverLocations(activeDeliveries) {
         }
     });
 
-    // 4. Update the Driver Info List (below the map)
+    // 6. Update the Driver Info List below the map
     if (driverList) {
         driverList.innerHTML = drivers.map(d => {
             let timeText = 'Just now';
@@ -1824,60 +1826,17 @@ async function loadDriverLocations(activeDeliveries) {
                 if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
             }
             return `
-                <div style="display:flex;justify-content:space-between;align-items:center;
-                            padding:12px 16px;background:var(--bg3);border-radius:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border-radius:10px">
                     <div style="display:flex;align-items:center;gap:12px">
                         <div class="pulse-dot"></div>
                         <div>
                             <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
-                            <div style="font-size:11px;color:var(--text3)">
-                                📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}
-                                · Updated: ${timeText}
-                            </div>
+                            <div style="font-size:11px;color:var(--text3)">📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)} · Updated: ${timeText}</div>
                         </div>
                     </div>
-                    <button class="btn btn-ghost btn-sm"
-                        onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">
-                        🎯 Focus
-                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">🎯 Focus</button>
                 </div>`;
         }).join('');
-    }
-}
-
-// ── FOCUS ON DRIVER ───────────────────────────────────────────
-window.centerOnDriver = function(lat, lng, name) {
-    if (trackingMap) {
-        trackingMap.flyTo([parseFloat(lat), parseFloat(lng)], 16, {
-            animate: true,
-            duration: 1.5
-        });
-        showToast(`Focusing on ${name} 🎯`, 'info');
-    }
-};
-
-// ── REFRESH & UTILITIES ────────────────────────────────────────
-async function refreshDriverLocations() {
-    const deliveries = await API.get('/deliveries') || [];
-    const active = deliveries.filter(d => d.delivery_status === 'in_transit');
-    await loadDriverLocations(active);
-    showToast('Driver positions updated ✓');
-}
-
-function calcDeliveryFee() {
-    const dist = parseFloat(document.getElementById('calc-dist').value) || 0;
-    const rate = parseFloat(document.getElementById('calc-rate').value) || 0;
-    document.getElementById('calc-result').textContent = `₱${(dist * rate).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('calc-formula').textContent = `Formula: ${dist}km × ₱${rate}/km`;
-}
-
-async function updateDeliveryStatus(id, status) {
-    const result = await API.put(`/deliveries/${id}`, { delivery_status: status });
-    if (result) { 
-        showToast(`Delivery #D${id} is now ${status.replace('_', ' ')}`); 
-        pages.deliveries(); 
-    } else {
-        showToast('Failed to update status', 'error');
     }
 }
 
