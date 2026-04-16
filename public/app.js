@@ -2787,6 +2787,18 @@ window.dismissNotif = function(key) {
   showToast("Notification cleared");
 };
 window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar'); // Make sure your <div> ID is 'sidebar'
-    sidebar.classList.toggle('-translate-x-full'); // Or whatever class you use to hide it
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content'); // Optional: if your main content shifts
+
+    // Toggle between a "collapsed" width and "expanded" width
+    // Adjust these classes based on your CSS (e.g., 'w-16' vs 'w-64')
+    if (sidebar.classList.contains('w-64')) {
+        sidebar.classList.remove('w-64');
+        sidebar.classList.add('w-20'); // Minimized state
+        sidebar.setAttribute('data-collapsed', 'true');
+    } else {
+        sidebar.classList.remove('w-20');
+        sidebar.classList.add('w-64'); // Expanded state
+        sidebar.setAttribute('data-collapsed', 'false');
+    }
 };
