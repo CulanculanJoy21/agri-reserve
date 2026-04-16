@@ -108,15 +108,16 @@ class DeliveryController extends Controller
 
         // 4. 🟢 RESERVATION LIFECYCLE SYNC
         if ($newDeliveryStatus === 'delivered') {
-            // We keep the status as 'assigned' (With Farmer)
-            // This keeps the Return Button visible in app.js and keeps the equipment in "Reserved"
+            // Keep as 'assigned' (Dashboard shows "With Farmer")
             if ($res) {
                 $res->update(['status' => 'assigned']);
             }
         } 
         elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
+            // 🟢 CHANGE: Push 'in_transit' to the reservation
+            // This allows the Farmer app to show the "In Transit" badge
             if ($res) {
-                $res->update(['status' => 'assigned']);
+                $res->update(['status' => 'in_transit']);
             }
         }
 

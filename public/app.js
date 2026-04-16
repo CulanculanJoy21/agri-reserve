@@ -792,31 +792,61 @@ async function calcAutoDistance() {
 
   let lat = null, lng = null;
 
-  // Check if input looks like coordinates e.g. "7.9063, 125.0942"
+  // 1. Regex to extract Lat and Lng
   const coordPattern = /^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/;
-  const match        = input.match(coordPattern);
+  const match = input.match(coordPattern);
 
   if (match) {
     lat = parseFloat(match[1]);
     lng = parseFloat(match[2]);
+
+    // 🚩 COORDINATE SANITY CHECK (Valencia City Range)
+    // If the lat is over 90, they likely forgot a decimal point (e.g., 79063 instead of 7.9063)
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        showToast('Invalid coordinates. Did you forget a decimal point?', 'error');
+        return;
+    }
   } else {
-    showToast('Please enter coordinates format: 7.9063, 125.0942', 'error');
+    showToast('Use format: 7.9063, 125.0942', 'error');
     return;
   }
 
-  showToast('Calculating distance...', 'info');
+  showToast('Fetching route data...', 'info');
+  
+  // 2. Call your backend OSRM service
   const result = await calculateDistance(lat, lng, null);
 
   if (result) {
+    // 3. Update the UI Display
     document.getElementById('calc-auto-result').style.display = 'block';
     document.getElementById('calc-auto-km').textContent       = `${result.km} km`;
     document.getElementById('calc-auto-duration').textContent = `🕐 Drive time: ${result.duration}`;
-    document.getElementById('calc-dist').value                = result.km;
-    calcDeliveryFee();
+    
+    // 4. Update the hidden inputs for the form
+    const distInput = document.getElementById('calc-dist');
+    if (distInput) {
+        distInput.value = result.km;
+        // 🟢 TRIGGER THE MATH: Ensure the price updates immediately
+        calcDeliveryFee(); 
+    }
+
     showToast(`Distance: ${result.km} km · ${result.duration}`);
   } else {
-    showToast('Could not calculate. Check coordinates.', 'error');
+    showToast('Calculation failed. Check OSRM service.', 'error');
   }
+}
+
+// 🟢 Ensure the fee calculation function is robust
+window.calcDeliveryFee = function() {
+    const km = parseFloat(document.getElementById('calc-dist').value) || 0;
+    const price = parseFloat(document.getElementById('calc-price-per-km').value) || 25; // default 25
+    
+    const total = km * price;
+    
+    const display = document.getElementById('calc-fee-display');
+    if (display) {
+        display.textContent = `₱${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    }
 }
 
 async function cancelReservation(id) {
@@ -2582,28 +2612,39 @@ if (savedToken) {
   showLoginPage();
 }
 // --- NOTIFICATION HELPERS ---
-window.toggleNotifs = function() {
-    const dropdown = document.getElementById('notif-dropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('open');
-        if (dropdown.classList.contains('open')) loadNotifications();
-    }
-};
-
+// 1. Get the list of IDs the user has already clicked "X" on
 window.getDismissed = function() {
-    return JSON.parse(localStorage.getItem('dismissed_notifs') || '[]');
+  return JSON.parse(localStorage.getItem('dismissed_notifs') || '[]');
 };
 
-// --- MAP & DELIVERY HELPERS ---
-window.refreshDriverLocations = function() {
-    showToast('Refreshing driver map...', 'info');
-    loadDriverLocations(); // This calls the function we compiled earlier
+// 2. Save a new ID to the dismissed list in the browser
+window.saveDismissed = function(list) {
+  localStorage.setItem('dismissed_notifs', JSON.stringify(list));
 };
 
-window.updateDeliveryStatus = async function(id, newStatus) {
-    const res = await API.put(`/deliveries/${id}`, { delivery_status: newStatus });
-    if (res) {
-        showToast(`Delivery updated to ${newStatus}`);
-        pages.deliveries(); // Refresh the table
-    }
+// 3. The actual display logic (Your Code Integrated)
+window.updateNotifBadge = function(notifs) {
+  const dismissed = getDismissed();
+  
+  // Only show notifications that haven't been dismissed
+  const visible = notifs.filter(n => !dismissed.includes(n.key));
+  window._notifs = notifs; // Store globally for clearAll function
+
+  const unreadCount = visible.length; // Count visible items
+  const badge = document.getElementById('notif-count');
+  
+  if (badge) {
+    badge.textContent = unreadCount;
+    // 🟢 Show the red dot only if there are new items
+    badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+  }
+};
+window.dismissNotif = function(key) {
+  const dismissed = getDismissed();
+  if (!dismissed.includes(key)) dismissed.push(key);
+  saveDismissed(dismissed);
+  
+  // Refresh the UI immediately
+  loadNotifications(); 
+  showToast("Notification cleared");
 };
