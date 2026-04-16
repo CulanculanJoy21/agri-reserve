@@ -786,88 +786,129 @@ pages.reservations = async function (filterStatus = 'all') {
   `;
 };
 
-async function calcAutoDistance() {
-  const input = document.getElementById('calc-address').value.trim();
-  if (!input) { showToast('Enter coordinates (lat, lng)', 'error'); return; }
+window.calcAutoDistance = async function() {
+    const input = document.getElementById('calc-address')?.value.trim();
+    if (!input) { showToast('Enter coordinates (lat, lng)', 'error'); return; }
 
-  let lat = null, lng = null;
+    let lat = null, lng = null;
+    const coordPattern = /^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/;
+    const match = input.match(coordPattern);
 
-  // 1. Regex to extract Lat and Lng
-  const coordPattern = /^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/;
-  const match = input.match(coordPattern);
-
-  if (match) {
-    lat = parseFloat(match[1]);
-    lng = parseFloat(match[2]);
-
-    // 🚩 COORDINATE SANITY CHECK (Valencia City Range)
-    // If the lat is over 90, they likely forgot a decimal point (e.g., 79063 instead of 7.9063)
-    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-        showToast('Invalid coordinates. Did you forget a decimal point?', 'error');
+    if (match) {
+        lat = parseFloat(match[1]);
+        lng = parseFloat(match[2]);
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+            showToast('Invalid coordinates. Check decimals.', 'error');
+            return;
+        }
+    } else {
+        showToast('Use format: 7.9063, 125.0942', 'error');
         return;
     }
-  } else {
-    showToast('Use format: 7.9063, 125.0942', 'error');
-    return;
-  }
 
-  showToast('Fetching route data...', 'info');
-  
-  // 2. Call your backend OSRM service
-  const result = await calculateDistance(lat, lng, null);
-
-  if (result) {
-    // 3. Update the UI Display
-    document.getElementById('calc-auto-result').style.display = 'block';
-    document.getElementById('calc-auto-km').textContent       = `${result.km} km`;
-    document.getElementById('calc-auto-duration').textContent = `🕐 Drive time: ${result.duration}`;
+    showToast('Calculating road distance...', 'info');
     
-    // 4. Update the hidden inputs for the form
-    const distInput = document.getElementById('calc-dist');
-    if (distInput) {
-        distInput.value = result.km;
-        // 🟢 TRIGGER THE MATH: Ensure the price updates immediately
-        calcDeliveryFee(); 
+    // Call your backend OSRM service
+    const result = await calculateDistance(lat, lng, null);
+
+    if (result) {
+        // 1. Update text labels in the UI
+        const kmLabel = document.getElementById('calc-auto-km');
+        const timeLabel = document.getElementById('calc-auto-duration');
+        const resBox = document.getElementById('calc-auto-result');
+
+        if (resBox) resBox.style.display = 'block';
+        
+        // Match the exact key from your Laravel response: road_distance_km
+        if (kmLabel) kmLabel.textContent = `${result.road_distance_km} km`;
+        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${result.duration_text}`;
+
+        // 2. Try to find the input field to fill (supports multiple ID patterns)
+        const distInput = document.getElementById('calc-dist') || document.getElementById('distance_km');
+        
+        if (distInput) {
+            distInput.value = result.road_distance_km;
+            // Force the fee calculation to run now that we have a distance
+            window.calcDeliveryFee();
+        }
+
+        showToast(`Distance: ${result.road_distance_km} km`);
     }
+};
 
-    showToast(`Distance: ${result.km} km · ${result.duration}`);
-  } else {
-    showToast('Calculation failed. Check OSRM service.', 'error');
-  }
-}
-
-// 🟢 Ensure the fee calculation function is robust
 window.calcDeliveryFee = function() {
-    // 1. Grab the elements
-    const distEl = document.getElementById('calc-dist');
-    const priceEl = document.getElementById('calc-price-per-km');
-    const displayEl = document.getElementById('calc-fee-display');
+    // Looks for common ID patterns used in your Laravel/Android views
+    const distEl = document.getElementById('calc-dist') || document.getElementById('distance_km');
+    const priceEl = document.getElementById('calc-price-per-km') || document.getElementById('price_per_km');
+    const displayEl = document.getElementById('calc-fee-display') || document.getElementById('estimated-fee');
 
-    // 2. 🛡️ Safety Check: If any part is missing, don't run the math
-    if (!distEl || !priceEl) {
-        console.warn("Calculation fields not found in the current view.");
-        return; 
-    }
+    // If elements aren't rendered on screen, stop quietly (prevents console errors)
+    if (!distEl || !priceEl) return; 
 
-    // 3. Get values and perform math
     const km = parseFloat(distEl.value) || 0;
     const price = parseFloat(priceEl.value) || 0;
     const total = km * price;
-    
-    // 4. Update the display if it exists
+
     if (displayEl) {
         displayEl.textContent = `₱${total.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         })}`;
     }
-}
-window.showLogout = function() {
-    if (confirm("Are you sure you want to log out of AgriReserve?")) {
-        localStorage.clear();
-        window.location.href = '/login'; // or your login route
+};
+window.toggleNotifs = function() {
+    const dropdown = document.getElementById('notif-dropdown');
+    const badge = document.getElementById('notif-count');
+
+    if (!dropdown) return;
+
+    // Toggle visibility
+    const isActive = dropdown.classList.toggle('active');
+
+    if (isActive) {
+        // Refresh data when opened
+        if (typeof loadNotifications === 'function') {
+            loadNotifications();
+        }
+        // Optional: Hide badge once the user looks at the list
+        if (badge) badge.style.display = 'none';
     }
 };
+
+window.updateNotifBadge = function(notifs) {
+    const dismissed = window.getDismissed ? window.getDismissed() : [];
+    
+    // Filter out notifications the user already "X-ed" out
+    const visible = notifs.filter(n => !dismissed.includes(n.key));
+    window._notifs = notifs; 
+
+    const unreadCount = visible.length;
+    const badge = document.getElementById('notif-count');
+    
+    if (badge) {
+        badge.textContent = unreadCount;
+        // Show red dot only if there are active notifications
+        badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+    }
+};
+
+window.dismissNotif = function(key) {
+    const dismissed = window.getDismissed ? window.getDismissed() : [];
+    if (!dismissed.includes(key)) dismissed.push(key);
+    
+    if (window.saveDismissed) {
+        window.saveDismissed(dismissed);
+    } else {
+        localStorage.setItem('dismissed_notifs', JSON.stringify(dismissed));
+    }
+    
+    // Refresh the UI so the item disappears immediately
+    if (typeof loadNotifications === 'function') {
+        loadNotifications();
+    }
+    showToast("Notification cleared");
+};
+
 
 async function cancelReservation(id) {
   if (!confirm('Cancel this reservation? The equipment will be freed up.')) return;
