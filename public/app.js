@@ -788,49 +788,48 @@ pages.reservations = async function (filterStatus = 'all') {
 
 window.calcAutoDistance = async function() {
     const input = document.getElementById('calc-address')?.value.trim();
-    if (!input) { showToast('Enter coordinates (lat, lng)', 'error'); return; }
-
-    // Parse coordinates
+    if (!input) {
+        showToast('Enter coordinates (lat, lng)', 'error');
+        return;
+    }
+ 
     const parts = input.split(',');
     if (parts.length < 2) {
         showToast('Format: 7.9063, 125.0942', 'error');
         return;
     }
-    const finalKm = result.road_distance_km;
+ 
     const lat = parseFloat(parts[0].trim());
     const lng = parseFloat(parts[1].trim());
-
+ 
     if (isNaN(lat) || isNaN(lng)) {
         showToast('Invalid coordinates. Example: 7.9063, 125.0942', 'error');
         return;
     }
-
+ 
     showToast('Calculating distance from base...', 'info');
-
+ 
+    // result is defined AFTER the await — bug is fixed here
     const result = await calculateDistance(lat, lng, null);
-
+ 
     if (result) {
         const km = result.km;
-
-        // Fill distance input — try both possible IDs
+ 
         const distInput = document.getElementById('calc-dist');
         if (distInput) {
             distInput.value = km;
             distInput.dispatchEvent(new Event('input'));
         }
-
-        // Update display labels
+ 
         const kmLabel    = document.getElementById('calc-auto-km');
         const durLabel   = document.getElementById('calc-auto-duration');
         const autoResult = document.getElementById('calc-auto-result');
-
-        if (kmLabel)    kmLabel.textContent    = `${km} km`;
-        if (durLabel)   durLabel.textContent   = `🕐 Drive time: ${result.duration}`;
+ 
+        if (kmLabel)    kmLabel.textContent     = `${km} km`;
+        if (durLabel)   durLabel.textContent    = `🕐 Drive time: ${result.duration}`;
         if (autoResult) autoResult.style.display = 'block';
-
-        // Calculate fee
+ 
         window.calcDeliveryFee();
-
         showToast(`Distance: ${km} km · ${result.duration}`);
     } else {
         showToast('Could not calculate. Check your coordinates.', 'error');
@@ -838,41 +837,37 @@ window.calcAutoDistance = async function() {
 };
 
 window.calcDeliveryFee = function() {
-    // Support both possible element IDs
-    const distEl    = document.getElementById('calc-dist');
-    const rateEl    = document.getElementById('calc-rate')
-                   || document.getElementById('calc-price-per-km');
-    const resultEl  = document.getElementById('calc-result')
-                   || document.getElementById('calc-fee-display');
-    const formulaEl = document.getElementById('calc-formula');
-
+    const distEl   = document.getElementById('calc-dist');
+    const rateEl   = document.getElementById('calc-rate')
+                  || document.getElementById('calc-price-per-km');
+    const resultEl = document.getElementById('calc-result')
+                  || document.getElementById('calc-fee-display');
+    const formulaEl= document.getElementById('calc-formula');
+ 
     if (!distEl || !resultEl) return;
-
+ 
     const km    = parseFloat(distEl.value)  || 0;
     const price = parseFloat(rateEl?.value) || 25;
     const total = km * price;
-
+ 
     resultEl.textContent = `₱${total.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     })}`;
-
+ 
     if (formulaEl) {
         formulaEl.textContent = `Formula: ${km}km × ₱${price}/km`;
     }
 };
-window.toggleNotifs = function() {
+function toggleNotifs() {
     const dropdown = document.getElementById('notif-dropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('active');
-        // Refresh notifications when opened
-        if (dropdown.classList.contains('active') && typeof loadNotifications === 'function') {
-            loadNotifications();
-        }
-    } else {
-        console.error("Could not find 'notif-dropdown' element in HTML.");
+    if (!dropdown) return;
+    dropdown.classList.toggle('open');
+    if (dropdown.classList.contains('open')) {
+        loadNotifications();
     }
-};
+}
+window.toggleNotifs = toggleNotifs;
 
 window.updateNotifBadge = function(notifs) {
     const dismissed = window.getDismissed ? window.getDismissed() : [];
@@ -1497,7 +1492,6 @@ async function saveDelivery(reservationId) {
 
 // ---- DELIVERIES ----
 
-let deliveryMarkers  = [];
 let trackingMap      = null;
 let trackingInterval = null;
 let driverMarkers    = {};
@@ -1505,27 +1499,17 @@ let driverMarkers    = {};
 pages.deliveries = async function () {
   showLoading();
  
-  if (window.trackingInterval) clearInterval(window.trackingInterval);
-
-  // Refresh driver pins every 5 seconds
-  window.trackingInterval = setInterval(async () => {
-    if (currentPage !== 'deliveries') {
-        clearInterval(window.trackingInterval);
-        return;
-    }
-    
-    // This calls your Laravel Cloud route: GET /api/drivers/locations
-    await loadDriverLocations(activeDeliveries);
-  }, 5000);
-  // Reset markers
+  // Clear old interval
+  if (window.trackingInterval) {
+    clearInterval(window.trackingInterval);
+    window.trackingInterval = null;
+  }
   driverMarkers = {};
  
   const deliveries = await API.get('/deliveries') || [];
   const pending    = deliveries.filter(d => d.delivery_status === 'pending').length;
   const inTransit  = deliveries.filter(d => d.delivery_status === 'in_transit').length;
   const delivered  = deliveries.filter(d => d.delivery_status === 'delivered').length;
- 
-  // Active deliveries for map pins
   const activeDeliveries = deliveries.filter(d => d.delivery_status === 'in_transit');
  
   document.getElementById('content').innerHTML = `
@@ -1536,20 +1520,10 @@ pages.deliveries = async function () {
       </div>
     </div>
  
-    <!-- Stats -->
     <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-      <div class="stat-card yellow">
-        <div class="stat-label">Pending</div>
-        <div class="stat-value" style="color:var(--yellow)">${pending}</div>
-      </div>
-      <div class="stat-card orange">
-        <div class="stat-label">In Transit</div>
-        <div class="stat-value" style="color:var(--orange)">${inTransit}</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-label">Delivered</div>
-        <div class="stat-value">${delivered}</div>
-      </div>
+      <div class="stat-card yellow"><div class="stat-label">Pending</div><div class="stat-value" style="color:var(--yellow)">${pending}</div></div>
+      <div class="stat-card orange"><div class="stat-label">In Transit</div><div class="stat-value" style="color:var(--orange)">${inTransit}</div></div>
+      <div class="stat-card green"><div class="stat-label">Delivered</div><div class="stat-value">${delivered}</div></div>
     </div>
  
     <!-- LIVE TRACKING MAP -->
@@ -1561,40 +1535,20 @@ pages.deliveries = async function () {
             <div class="tracking-badge">
               <div class="pulse-dot"></div>
               ${inTransit} driver${inTransit > 1 ? 's' : ''} in transit
-            </div>
-          ` : `
-            <span style="font-size:12px;color:var(--text3)">No active deliveries</span>
-          `}
-          <button class="btn btn-ghost btn-sm" onclick="refreshDriverLocations()">
-            🔄 Refresh
-          </button>
+            </div>` : `
+            <span style="font-size:12px;color:var(--text3)">No active deliveries</span>`}
+          <button class="btn btn-ghost btn-sm" onclick="refreshDriverLocations()">🔄 Refresh</button>
         </div>
       </div>
  
-      <!-- Legend -->
       <div class="map-legend">
-        <div class="map-legend-item">
-          <div class="legend-dot driver-online"></div>
-          <span>Driver Location (live)</span>
-        </div>
-        <div class="map-legend-item">
-          <div class="legend-dot delivery-addr"></div>
-          <span>Delivery Address</span>
-        </div>
-        <div class="map-legend-item">
-          <div class="legend-dot base-location"></div>
-          <span>Base Location</span>
-        </div>
+        <div class="map-legend-item"><div class="legend-dot driver-online"></div><span>Driver (live)</span></div>
+        <div class="map-legend-item"><div class="legend-dot delivery-addr"></div><span>Delivery Address</span></div>
+        <div class="map-legend-item"><div class="legend-dot base-location"></div><span>Base Location</span></div>
       </div>
  
-      <!-- Map container — must have explicit height -->
-      <div id="live-map"
-           style="height:420px;width:100%;border-radius:12px;
-                  border:1px solid var(--border);overflow:hidden;
-                  background:#0d1117">
-      </div>
+      <div id="live-map" style="height:420px;width:100%;border-radius:12px;border:1px solid var(--border);overflow:hidden;background:#0d1117"></div>
  
-      <!-- Driver list below map -->
       <div id="driver-list" style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
         <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
           Loading driver locations...
@@ -1602,154 +1556,108 @@ pages.deliveries = async function () {
       </div>
     </div>
  
-    <!-- Deliveries Table + Calculator -->
     <div class="grid-2">
- 
-      <!-- All Deliveries Table -->
+      <!-- Deliveries Table -->
       <div class="card">
         <div class="card-header"><span class="card-title">All Deliveries</span></div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>#</th>
-                <th>Equipment → Farmer</th>
-                <th>Driver</th>
-                <th>Address</th>
-                <th>Fee</th>
-                <th>Status</th>
-                <th>Update</th>
-              </tr>
+              <tr><th>#</th><th>Equipment → Farmer</th><th>Driver</th><th>Address</th><th>Fee</th><th>Status</th><th>Update</th></tr>
             </thead>
             <tbody>
               ${deliveries.length ? deliveries.map(d => `<tr>
                 <td><strong>#D${d.delivery_id}</strong></td>
                 <td>
                   <strong>${d.reservation?.equipment?.equipment_name || '—'}</strong>
-                  <br><span style="font-size:11px;color:var(--text3)">
-                    → ${d.reservation?.farmer?.name || '—'}
-                  </span>
+                  <br><span style="font-size:11px;color:var(--text3)">→ ${d.reservation?.farmer?.name || '—'}</span>
                 </td>
-                <td>${d.driver
-                  ? d.driver.name
-                  : '<span style="color:var(--text3)">Unassigned</span>'
-                }</td>
+                <td>${d.driver ? d.driver.name : '<span style="color:var(--text3)">Unassigned</span>'}</td>
                 <td style="max-width:140px">
                   <span style="font-size:11px;color:var(--text3)">
                     ${d.delivery_address
-                      ? `📍 ${d.delivery_address.substring(0, 40)}${d.delivery_address.length > 40 ? '…' : ''}`
-                      : '<span style="color:var(--red)">No address</span>'
-                    }
+                      ? `📍 ${d.delivery_address.substring(0,40)}${d.delivery_address.length > 40 ? '…' : ''}`
+                      : '<span style="color:var(--red)">No address</span>'}
                   </span>
                 </td>
                 <td style="color:var(--accent);font-weight:700">
                   ₱${d.delivery_fee}
-                  <br><span style="color:var(--text3);font-size:11px">
-                    ${d.distance_km}km × ₱${d.price_per_km}
-                  </span>
+                  <br><span style="color:var(--text3);font-size:11px">${d.distance_km}km × ₱${d.price_per_km}</span>
                 </td>
                 <td>${statusBadge(d.delivery_status)}</td>
                 <td>
-                  <select class="form-control"
-                    style="width:130px;padding:5px 8px;font-size:12px"
+                  <select class="form-control" style="width:130px;padding:5px 8px;font-size:12px"
                     onchange="updateDeliveryStatus(${d.delivery_id}, this.value)">
-                    <option value="pending"
-                      ${d.delivery_status === 'pending'    ? 'selected' : ''}>Pending</option>
-                    <option value="in_transit"
-                      ${d.delivery_status === 'in_transit' ? 'selected' : ''}>In Transit</option>
-                    <option value="delivered"
-                      ${d.delivery_status === 'delivered'  ? 'selected' : ''}>Delivered</option>
+                    <option value="pending"    ${d.delivery_status==='pending'    ? 'selected':''}>Pending</option>
+                    <option value="in_transit" ${d.delivery_status==='in_transit' ? 'selected':''}>In Transit</option>
+                    <option value="delivered"  ${d.delivery_status==='delivered'  ? 'selected':''}>Delivered</option>
                   </select>
                 </td>
               </tr>`).join('') : `
-                <tr><td colspan="7">
-                  <div class="empty-state">
-                    <div class="empty-icon">🚚</div>No deliveries yet
-                  </div>
-                </td></tr>
-              `}
+                <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🚚</div>No deliveries yet</div></td></tr>`}
             </tbody>
           </table>
         </div>
       </div>
  
-      <!-- Delivery Fee Calculator -->
+      <!-- Fee Calculator -->
       <div class="card">
         <div class="card-header"><span class="card-title">Delivery Fee Calculator</span></div>
         <div style="display:flex;flex-direction:column;gap:14px">
- 
           <div class="form-group">
             <label>Coordinates (lat, lng)
               <span style="color:var(--text3);font-size:11px">— Get from Google Maps</span>
             </label>
-            <input class="form-control" id="calc-address"
-                   placeholder="e.g. 7.9063, 125.0942"/>
+            <input class="form-control" id="calc-address" placeholder="e.g. 7.9063, 125.0942"/>
           </div>
- 
           <button class="btn btn-primary" onclick="calcAutoDistance()" style="width:100%">
             📏 Calculate Distance from Base Location
           </button>
- 
-          <div id="calc-auto-result"
-               style="display:none;padding:14px;background:var(--bg3);border-radius:10px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
-              📍 DISTANCE FROM BASE LOCATION
-            </div>
-            <div style="font-size:26px;font-weight:800;color:var(--accent)"
-                 id="calc-auto-km">— km</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px"
-                 id="calc-auto-duration">—</div>
+          <div id="calc-auto-result" style="display:none;padding:14px;background:var(--bg3);border-radius:10px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">📍 DISTANCE FROM BASE LOCATION</div>
+            <div style="font-size:26px;font-weight:800;color:var(--accent)" id="calc-auto-km">— km</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px" id="calc-auto-duration">—</div>
           </div>
- 
           <div class="form-row">
             <div class="form-group">
               <label>Distance (km)</label>
-              <input class="form-control" type="number" id="calc-dist"
-                     placeholder="Auto-filled above" oninput="calcDeliveryFee()"/>
+              <input class="form-control" type="number" id="calc-dist" placeholder="Auto-filled above" oninput="calcDeliveryFee()"/>
             </div>
             <div class="form-group">
               <label>Price per km (₱)</label>
-              <input class="form-control" type="number" id="calc-rate"
-                     value="25" oninput="calcDeliveryFee()"/>
+              <input class="form-control" type="number" id="calc-rate" value="25" oninput="calcDeliveryFee()"/>
             </div>
           </div>
- 
           <div style="padding:20px;background:var(--bg3);border-radius:var(--radius);text-align:center">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:4px">
-              ESTIMATED DELIVERY FEE
-            </div>
-            <div style="font-size:36px;font-weight:800;color:var(--accent);
-                        font-family:var(--font-head)" id="calc-result">₱0.00</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px"
-                 id="calc-formula">Formula: 0km × ₱25/km</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:4px">ESTIMATED DELIVERY FEE</div>
+            <div style="font-size:36px;font-weight:800;color:var(--accent);font-family:var(--font-head)" id="calc-result">₱0.00</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px" id="calc-formula">Formula: 0km × ₱25/km</div>
           </div>
- 
-          <div style="font-size:12px;color:var(--text3);text-align:center;
-                      padding:10px;background:var(--bg3);border-radius:8px">
+          <div style="font-size:12px;color:var(--text3);text-align:center;padding:10px;background:var(--bg3);border-radius:8px">
             📍 Base: Your house, Valencia City, Bukidnon
           </div>
         </div>
       </div>
- 
     </div>
   `;
  
-  // Initialize map after DOM renders
+  // Init map after DOM renders
   setTimeout(() => {
     initTrackingMap(activeDeliveries);
-    loadDriverLocations(activeDeliveries);
-
-    window.trackingInterval = setInterval(async () => {
-        if (currentPage !== 'deliveries') {
-            clearInterval(window.trackingInterval);
-            return;
-        }
-        await loadDriverLocations(); 
-    }, 600000); // 10 minutes
-    
-  }, 300); // 🟢 This closes the setTimeout and the logic inside correctly
-};
+    loadDriverLocations();
  
+    // ✅ CORRECT INTERVAL — 10 seconds for real-time tracking
+    window.trackingInterval = setInterval(async () => {
+      if (currentPage !== 'deliveries') {
+        clearInterval(window.trackingInterval);
+        window.trackingInterval = null;
+        return;
+      }
+      await loadDriverLocations();
+    }, 10000); // 10 seconds
+ 
+  }, 300);
+};
 // ── MAP INITIALIZATION ────────────────────────────────────────
 function initTrackingMap(activeDeliveries) {
   // Destroy old map if exists
@@ -1813,118 +1721,117 @@ function initTrackingMap(activeDeliveries) {
  
 // ── LOAD DRIVER LOCATIONS ─────────────────────────────────────
 async function loadDriverLocations() {
-    // 1. Fetch drivers from API (Laravel Controller filtered to subMinutes(2))
-    const drivers = await API.get('/drivers/locations');
-    const driverList = document.getElementById('driver-list');
-    const badge = document.querySelector('.tracking-badge');
-
-    if (!drivers || !trackingMap) return;
-
-    // 2. 🟢 GHOST CLEANUP: Remove drivers who stop pinging
-    const serverIds = drivers.map(d => d.id.toString());
-    Object.keys(driverMarkers).forEach(id => {
-        if (!serverIds.includes(id)) {
-            trackingMap.removeLayer(driverMarkers[id]); // Wipe icon from map
-            delete driverMarkers[id]; // Wipe from memory
-        }
+  const drivers    = await API.get('/drivers/locations');
+  const driverList = document.getElementById('driver-list');
+ 
+  if (!drivers || !trackingMap) return;
+ 
+  // Remove drivers who went offline
+  const serverIds = drivers.map(d => String(d.id));
+  Object.keys(driverMarkers).forEach(id => {
+    if (!serverIds.includes(id)) {
+      trackingMap.removeLayer(driverMarkers[id]);
+      delete driverMarkers[id];
+    }
+  });
+ 
+  if (drivers.length === 0) {
+    if (driverList) driverList.innerHTML = `
+      <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
+        No drivers currently active
+      </div>`;
+    return;
+  }
+ 
+  drivers.forEach((driver, index) => {
+    const lat = parseFloat(driver.current_lat);
+    const lng = parseFloat(driver.current_lng);
+    if (!lat || !lng) return;
+ 
+    // Slight offset so overlapping drivers don't hide each other
+    const offsetLat = lat + (index * 0.0002);
+    const offsetLng = lng + (index * 0.0002);
+ 
+    let timeText = 'Just now';
+    if (driver.location_updated_at) {
+      const updated = new Date(driver.location_updated_at);
+      if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
+    }
+ 
+    const driverIcon = L.divIcon({
+      html: `
+        <div style="position:relative;width:20px;height:20px">
+          <div style="position:absolute;top:2px;left:2px;background:#4ade80;
+                      width:16px;height:16px;border-radius:50%;
+                      border:3px solid white;box-shadow:0 2px 8px rgba(74,222,128,0.7)">
+          </div>
+          <div style="position:absolute;top:0;left:0;width:20px;height:20px;
+                      border-radius:50%;border:2px solid #4ade80;
+                      animation:pulse-green 1.5s infinite;opacity:0.5">
+          </div>
+        </div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+      className: ''
     });
-
-    // 3. Update the "Live" badge status
-    if (badge) {
-        if (drivers.length > 0) {
-            badge.style.display = 'flex';
-            badge.innerHTML = `<div class="pulse-dot"></div> ${drivers.length} driver${drivers.length > 1 ? 's' : ''} live`;
-        } else {
-            badge.style.display = 'none';
-        }
+ 
+    const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Updated: ${timeText}</small>`;
+ 
+    if (driverMarkers[driver.id]) {
+      driverMarkers[driver.id]
+        .setLatLng([offsetLat, offsetLng])
+        .setPopupContent(popupContent);
+    } else {
+      driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
+        .addTo(trackingMap)
+        .bindPopup(popupContent);
     }
-
-    // 4. Handle Empty List UI
-    if (drivers.length === 0) {
-        if (driverList) {
-            driverList.innerHTML = `<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No drivers currently active</div>`;
-        }
-        return;
-    }
-
-    // 5. Update or Create Driver Markers
-    drivers.forEach((driver, index) => {
-        const lat = parseFloat(driver.current_lat);
-        const lng = parseFloat(driver.current_lng);
-        if (!lat || !lng) return;
-
-        // Visual offset for multiple drivers in same area
-        const offsetLat = lat + (index * 0.0002);
-        const offsetLng = lng + (index * 0.0002);
-
-        let timeText = 'Just now';
-        if (driver.location_updated_at) {
-            const updated = new Date(driver.location_updated_at);
-            if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
-        }
-
-        const driverIcon = L.divIcon({
-            html: `
-                <div style="position:relative;width:20px;height:20px">
-                    <div style="position:absolute;top:2px;left:2px;background:#4ade80;
-                                width:16px;height:16px;border-radius:50%;
-                                border:3px solid white;box-shadow:0 2px 8px rgba(74,222,128,0.7)">
-                    </div>
-                    <div style="position:absolute;top:0;left:0;width:20px;height:20px;
-                                border-radius:50%;border:2px solid #4ade80;
-                                animation:pulse-green 1.5s infinite;opacity:0.5">
-                    </div>
-                </div>`,
-            iconSize: [20, 20], iconAnchor: [10, 10], className: ''
-        });
-
-        const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Updated: ${timeText}</small>`;
-
-        if (driverMarkers[driver.id]) {
-            // Smoothly move the icon if already exists
-            driverMarkers[driver.id].setLatLng([offsetLat, offsetLng]).setPopupContent(popupContent);
-        } else {
-            // Place a new icon
-            driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
-                .addTo(trackingMap).bindPopup(popupContent);
-        }
-    });
-
-    // 6. Update Driver List below the map
-    if (driverList) {
-        driverList.innerHTML = drivers.map(d => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border-radius:10px">
-                <div style="display:flex;align-items:center;gap:12px">
-                    <div class="pulse-dot"></div>
-                    <div>
-                        <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
-                        <div style="font-size:11px;color:var(--text3)">📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}</div>
-                    </div>
-                </div>   
-                <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.id}')">🎯 Focus</button>
-            </div>`).join('');
-    }
+  });
+ 
+  if (driverList) {
+    driverList.innerHTML = drivers.map(d => {
+      let timeText = 'Just now';
+      if (d.location_updated_at) {
+        const t = new Date(d.location_updated_at);
+        if (!isNaN(t.getTime())) timeText = t.toLocaleTimeString();
+      }
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:12px 16px;background:var(--bg3);border-radius:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="pulse-dot"></div>
+            <div>
+              <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
+              <div style="font-size:11px;color:var(--text3)">
+                📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}
+                · ${timeText}
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm"
+            onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">
+            🎯 Focus
+          </button>
+        </div>`;
+    }).join('');
+  }
 }
-window.refreshDriverLocations = async function() {
-    showToast('Syncing live GPS data...', 'info');
-    await loadDriverLocations();
-};
-
-// 2. Click the 'Focus' button to center the map on a driver
 window.centerOnDriver = function(lat, lng, name) {
-    if (!trackingMap) return;
-    
-    // Zoom in and center on the driver
-    trackingMap.setView([lat, lng], 16, {
-        animate: true,
-        duration: 1.0
-    });
-
-    // Automatically open the driver's popup
-    if (driverMarkers[name] || Object.values(driverMarkers).length > 0) {
-        // Find marker by ID or proximity
-        showToast(`Focusing on ${name}`);
-    }
+  if (!lat || !lng || !trackingMap) {
+    showToast(`No GPS data for ${name}`, 'error');
+    return;
+  }
+  trackingMap.flyTo([parseFloat(lat), parseFloat(lng)], 16, {
+    animate: true,
+    duration: 1.5
+  });
+  showToast(`Focused on ${name} 🎯`);
+};
+ 
+window.refreshDriverLocations = async function() {
+  showToast('Syncing live GPS data...', 'info');
+  await loadDriverLocations();
+  showToast('Driver locations refreshed ✓');
 };
 
 // 3. Status Update Handler for the Table
@@ -2790,16 +2697,5 @@ window.dismissNotif = function(key) {
     showToast("Notification cleared");
 };
 window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const main = document.getElementById('main');
-    
-    if (sidebar.classList.contains('w-64')) {
-        sidebar.classList.replace('w-64', 'w-20');
-        if(main) main.style.marginLeft = '80px';
-        sidebar.setAttribute('data-collapsed', 'true');
-    } else {
-        sidebar.classList.replace('w-20', 'w-64');
-        if(main) main.style.marginLeft = '256px';
-        sidebar.setAttribute('data-collapsed', 'false');
-    }
+    document.getElementById('sidebar').classList.toggle('collapsed');
 };
