@@ -421,23 +421,26 @@ pages.equipment = async function (filter = 'all') {
   showLoading();
   const equipment = await API.get('/equipment') || [];
   let list = [...equipment];
-  if (filter !== 'all') list = list.filter(e => e.status === filter);
 
-  // --- UPDATED LOGIC: Summing up units across all equipment ---
+  // 🟢 FIXED LOGIC: Tab filters now look at quantities, not just string status
+  if (filter === 'available') {
+      list = list.filter(e => e.available_quantity > 0 && e.status !== 'maintenance');
+  } else if (filter === 'reserved') {
+      // Show items where at least one unit is rented out
+      list = list.filter(e => (parseInt(e.quantity) - parseInt(e.available_quantity)) > 0);
+  } else if (filter === 'maintenance') {
+      list = list.filter(e => e.status === 'maintenance');
+  }
+
   const all   = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
   const avail = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
-  
-  // Logic for Reserved: Total Units - Available Units (excluding those in maintenance)
   const res   = equipment.reduce((sum, e) => {
       if (e.status !== 'maintenance') {
           return sum + ((parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0));
       }
       return sum;
   }, 0);
-  
-  const maint = equipment.reduce((sum, e) => {
-      return e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum;
-  }, 0);
+  const maint = equipment.reduce((sum, e) => e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum, 0);
 
   document.getElementById('content').innerHTML = `
     <div class="page-header">
@@ -452,39 +455,31 @@ pages.equipment = async function (filter = 'all') {
     </div>
     <div class="equipment-grid">
       ${list.length ? list.map(e => {
-        // Dynamic color for stock badge
         const stockColor = e.available_quantity > 0 ? 'var(--accent)' : 'var(--red)';
-        
         return `
         <div class="equip-card">
           <div class="equip-img">⚙️</div>
           <div class="equip-body">
             <div class="equip-name">${e.equipment_name}</div>
             <div class="equip-cat">${e.category} · ${e.location || '—'}</div>
-            
             <div style="display:flex; gap:8px; align-items:center; margin-top:5px">
                ${statusBadge(e.status)}
                <span class="badge" style="background:rgba(255,255,255,0.05); border:1px solid ${stockColor}; color:${stockColor}">
                   Stock: ${e.available_quantity} / ${e.quantity}
                </span>
             </div>
-
             <div class="equip-meta" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
               <span class="equip-price">₱${e.rental_price.toLocaleString()}/day</span>
-              <span style="font-size:12px;color:${(e.available_quantity||1) > 0 ? 'var(--accent)' : 'var(--red)'}">
-                ${e.available_quantity || 0}/${e.quantity || 1} available
-              </span>
             </div>
             <p style="font-size:12px; color:var(--text3); margin-top:6px; line-height:1.4">${e.description || ''}</p>
-            
             <div class="equip-actions">
               <button class="btn btn-ghost btn-sm" onclick="showEditEquipment(${e.equipment_id})">✏ Edit</button>
               <button class="btn btn-ghost btn-sm" onclick="showEquipMaintenance(${e.equipment_id})">🔧 Maintenance</button>
               <button class="btn btn-danger btn-sm" onclick="deleteEquipment(${e.equipment_id})">✕</button>
             </div>
           </div>
-        </div>
-      `}).join('') : '<div class="empty-state"><div class="empty-icon">⚙️</div>No equipment found</div>'}
+        </div>`;
+      }).join('') : '<div class="empty-state"><div class="empty-icon">⚙️</div>No equipment found</div>'}
     </div>
   `;
 };
@@ -688,6 +683,7 @@ pages.reservations = async function (filterStatus = 'all') {
     assigned:  reservations.filter(r => r.status === 'assigned').length,
     rejected:  reservations.filter(r => r.status === 'rejected').length,
     completed: reservations.filter(r => r.status === 'completed').length,
+    cancelled: reservations.filter(r => r.status === 'cancelled').length, // added for count sync
   };
  
   document.getElementById('content').innerHTML = `
@@ -699,9 +695,9 @@ pages.reservations = async function (filterStatus = 'all') {
       </div>
     </div>
     <div class="tabs">
-      ${['all','pending','approved','assigned','rejected','completed'].map(s => `
+      ${['all','pending','approved','assigned','rejected','completed','cancelled'].map(s => `
         <button class="tab-btn ${filterStatus===s?'active':''}" onclick="pages.reservations('${s}')">
-          ${s.charAt(0).toUpperCase()+s.slice(1)} (${counts[s]})
+          ${s.charAt(0).toUpperCase()+s.slice(1)} (${counts[s] || 0})
         </button>
       `).join('')}
     </div>
@@ -737,58 +733,31 @@ pages.reservations = async function (filterStatus = 'all') {
               <td>${statusBadge(r.status)}</td>
               <td>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+                  <button class="btn btn-ghost btn-sm btn-icon" onclick="viewReservation(${r.reservation_id})" title="View">👁</button>
  
-                  <!-- View button always visible -->
-                  <button class="btn btn-ghost btn-sm btn-icon"
-                    onclick="viewReservation(${r.reservation_id})" title="View">👁</button>
- 
-                  <!-- PENDING actions -->
                   ${r.status === 'pending' ? `
-                    <button class="btn btn-primary btn-sm"
-                      onclick="approveReservation(${r.reservation_id})">✓ Approve</button>
-                    <button class="btn btn-danger btn-sm"
-                      onclick="rejectReservation(${r.reservation_id})">✕ Reject</button>
-                    <button class="btn btn-orange btn-sm"
-                      onclick="cancelReservation(${r.reservation_id})">✖ Cancel</button>
+                    <button class="btn btn-primary btn-sm" onclick="approveReservation(${r.reservation_id})">✓ Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectReservation(${r.reservation_id})">✕ Reject</button>
+                    <button class="btn btn-orange btn-sm" onclick="cancelReservation(${r.reservation_id})">✖ Cancel</button>
                   ` : ''}
  
-                  <!-- APPROVED actions -->
                   ${r.status === 'approved' ? `
-                    <button class="btn btn-orange btn-sm"
-                      onclick="cancelReservation(${r.reservation_id})">✖ Cancel</button>
+                    <button class="btn btn-orange btn-sm" onclick="cancelReservation(${r.reservation_id})">✖ Cancel</button>
                     ${r.reservation_type === 'delivery' ? `
-                      <button class="btn btn-primary btn-sm"
-                        onclick="assignDelivery(${r.reservation_id})">🚚 Assign Driver</button>
+                      <button class="btn btn-primary btn-sm" onclick="assignDelivery(${r.reservation_id})">🚚 Assign Driver</button>
                     ` : `
-                      <button class="btn btn-ghost btn-sm"
-                        onclick="completeReservation(${r.reservation_id})">✔ Done</button>
+                      <button class="btn btn-ghost btn-sm" onclick="completeReservation(${r.reservation_id})">✔ Done</button>
                     `}
                   ` : ''}
  
-                  <!-- ASSIGNED — driver already assigned -->
-                  ${r.status === 'assigned' ? `
-                    <span class="badge badge-blue" style="padding:6px 12px">
-                      ✓ Driver Assigned
-                    </span>
-                  ` : ''}
+                  ${r.status === 'assigned' ? `<span class="badge badge-blue" style="padding:6px 12px">✓ Driver Assigned</span>` : ''}
  
-                  <!-- COMPLETED or REJECTED — can delete -->
-                  ${r.status === 'completed' || r.status === 'rejected' ? `
-                    <button class="btn btn-danger btn-sm"
-                      onclick="deleteReservation(${r.reservation_id})" title="Delete">🗑</button>
+                  ${r.status === 'completed' || r.status === 'rejected' || r.status === 'cancelled' ? `
+                    <button class="btn btn-danger btn-sm" onclick="deleteReservation(${r.reservation_id})" title="Delete">🗑</button>
                   ` : ''}
- 
                 </div>
               </td>
-            </tr>`).join('') : `
-              <tr>
-                <td colspan="8">
-                  <div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    No reservations found
-                  </div>
-                </td>
-              </tr>`}
+            </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No reservations found</div></td></tr>`}
           </tbody>
         </table>
       </div>

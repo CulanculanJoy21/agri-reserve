@@ -167,12 +167,15 @@ class ReservationController extends Controller
 
     // --- DELETE RECORD ---
     public function destroy($id)
-    {
-        $res = Reservation::findOrFail($id);
-        if (!in_array($res->status, ['completed', 'rejected', 'cancelled'])) {
-            return response()->json(['message' => 'Cannot delete active reservations'], 422);
-        }
-        $res->delete();
-        return response()->json(['message' => 'Deleted']);
+{
+    $res = Reservation::findOrFail($id);
+    
+    // 🟢 FIXED: Added 'cancelled' to allow deletion of cancelled records
+    if (!in_array($res->status, ['completed', 'rejected', 'cancelled'])) {
+        return response()->json(['message' => 'Cannot delete active reservations'], 422);
+    }
+    
+    $res->delete();
+    return response()->json(['message' => 'Deleted']);
     }
 }
