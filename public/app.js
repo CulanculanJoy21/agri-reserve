@@ -2786,3 +2786,7 @@ window.dismissNotif = function(key) {
   loadNotifications(); 
   showToast("Notification cleared");
 };
+window.toggleSidebar = function() {
+    const sidebar = document.getElementById('sidebar'); // Make sure your <div> ID is 'sidebar'
+    sidebar.classList.toggle('-translate-x-full'); // Or whatever class you use to hide it
+};
