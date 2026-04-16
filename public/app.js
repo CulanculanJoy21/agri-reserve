@@ -792,72 +792,63 @@ window.calcAutoDistance = async function() {
 
     showToast('Calculating road distance...', 'info');
     
-    // We parse the lat/lng from your input "7.9, 125"
-    const [lat, lng] = input.split(',').map(s => s.trim());
+    // Split "7.9, 125" into separate variables
+    const parts = input.split(',');
+    const lat = parts[0]?.trim();
+    const lng = parts[1]?.trim();
     
-    // Call your backend
     const result = await calculateDistance(lat, lng, null);
 
     if (result) {
-        // 🟢 THE FIX: Use 'road_distance_km' instead of 'km'
-        const distValue = result.road_distance_km || result.km; 
-        const durationValue = result.duration_text || result.duration;
+        // 🟢 THE FIX: Create one reliable number. 
+        // Checks 'road_distance_km', then 'km', then 'straight_line_km'
+        const finalKm = result.road_distance_km || result.km || result.straight_line_km || 0;
+        const duration = result.duration_text || result.duration || "N/A";
 
-        // Update the Green Labels
+        // 1. Update the Labels (The green text)
         const kmLabel = document.getElementById('calc-auto-km');
         const timeLabel = document.getElementById('calc-auto-duration');
-        if (kmLabel) kmLabel.textContent = `${distValue} km`;
-        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${durationValue}`;
+        if (kmLabel) kmLabel.textContent = `${finalKm} km`;
+        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${duration}`;
 
-        // Update the Input Field and trigger Math
-        const distInput = document.getElementById('calc-dist');
+        // 2. Update the Input Field (The hidden/visible box)
+        const distInput = document.getElementById('calc-dist') || document.getElementById('distance_km');
         if (distInput) {
-            distInput.value = result.road_distance_km; // This puts the 13.5 in the box
+            distInput.value = finalKm; 
             
+            // 🟢 CRITICAL: Force the math to run now
             window.calcDeliveryFee(); 
         }
         
-        showToast(`Distance fetched: ${distValue} km`);
+        showToast(`Distance fetched: ${finalKm} km`);
     } else {
         showToast('Calculation failed', 'error');
     }
 };
 
-// 3. Robust Fee Calculation
 window.calcDeliveryFee = function() {
-    const d = document.getElementById('calc-dist');
-    const p = document.getElementById('calc-price-per-km');
-    const display = document.getElementById('calc-fee-display');
-
-    if (!d || !p || !display) return;
-
-    const km = parseFloat(d.value) || 0;
-    const price = parseFloat(p.value) || 0;
-    const total = km * price;
-
-    display.textContent = `₱${total.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    })}`;
-};
-window.calcDeliveryFee = function() {
-    // Looks for common ID patterns used in your Laravel/Android views
     const distEl = document.getElementById('calc-dist') || document.getElementById('distance_km');
     const priceEl = document.getElementById('calc-price-per-km') || document.getElementById('price_per_km');
     const displayEl = document.getElementById('calc-fee-display') || document.getElementById('estimated-fee');
 
-    // If elements aren't rendered on screen, stop quietly (prevents console errors)
-    if (!distEl || !priceEl) return; 
+    if (!distEl || !displayEl) return;
 
+    // Get values, default to 0 if empty or undefined
     const km = parseFloat(distEl.value) || 0;
-    const price = parseFloat(priceEl.value) || 0;
+    const price = priceEl ? (parseFloat(priceEl.value) || 25) : 25;
+    
     const total = km * price;
 
-    if (displayEl) {
-        displayEl.textContent = `₱${total.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        })}`;
+    // Update the big green ₱ amount
+    displayEl.textContent = `₱${total.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })}`;
+
+    // 🟢 OPTIONAL: Update the small "Formula" text if you have it
+    const formula = document.querySelector('.delivery-fee-card small');
+    if (formula) {
+        formula.textContent = `Formula: ${km}km × ₱${price}/km`;
     }
 };
 window.toggleNotifs = function() {
