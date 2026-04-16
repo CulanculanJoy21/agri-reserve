@@ -1738,16 +1738,17 @@ pages.deliveries = async function () {
   setTimeout(() => {
     initTrackingMap(activeDeliveries);
     loadDriverLocations(activeDeliveries);
- 
-window.trackingInterval = setInterval(async () => {
-    if (currentPage !== 'deliveries') {
-        clearInterval(window.trackingInterval);
-        return;
-    }
+
+    window.trackingInterval = setInterval(async () => {
+        if (currentPage !== 'deliveries') {
+            clearInterval(window.trackingInterval);
+            return;
+        }
+        await loadDriverLocations(); 
+    }, 600000); // 10 minutes
     
-    // 🟢 Update this to 10 minutes (600,000) so it matches your goal
-    await loadDriverLocations(); 
-}, 600000);
+  }, 300); // 🟢 This closes the setTimeout and the logic inside correctly
+};
  
 // ── MAP INITIALIZATION ────────────────────────────────────────
 function initTrackingMap(activeDeliveries) {
@@ -2781,27 +2782,24 @@ window.updateNotifBadge = function(notifs) {
   }
 };
 window.dismissNotif = function(key) {
-  const dismissed = getDismissed();
-  if (!dismissed.includes(key)) dismissed.push(key);
-  saveDismissed(dismissed);
-  
-  // Refresh the UI immediately
-  loadNotifications(); 
-  showToast("Notification cleared");
+    const dismissed = getDismissed();
+    if (!dismissed.includes(key)) dismissed.push(key);
+    saveDismissed(dismissed);
+    
+    loadNotifications();
+    showToast("Notification cleared");
 };
 window.toggleSidebar = function() {
     const sidebar = document.getElementById('sidebar');
     const main = document.getElementById('main');
     
-    // Check if the sidebar is currently expanded
-    // Adjust 'w-64' and 'w-20' to match the widths you used before
     if (sidebar.classList.contains('w-64')) {
         sidebar.classList.replace('w-64', 'w-20');
-        if(main) main.style.marginLeft = '80px'; // Shift main content
+        if(main) main.style.marginLeft = '80px';
         sidebar.setAttribute('data-collapsed', 'true');
     } else {
         sidebar.classList.replace('w-20', 'w-64');
-        if(main) main.style.marginLeft = '256px'; // Shift main content back
+        if(main) main.style.marginLeft = '256px';
         sidebar.setAttribute('data-collapsed', 'false');
     }
 };
