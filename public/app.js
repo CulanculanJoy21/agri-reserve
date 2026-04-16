@@ -422,56 +422,79 @@ pages.equipment = async function (filter = 'all') {
   const equipment = await API.get('/equipment') || [];
   let list = [...equipment];
 
-  // 🟢 FIXED LOGIC: Tab filters now look at quantities, not just string status
-  if (filter === 'available') {
-      list = list.filter(e => e.available_quantity > 0 && e.status !== 'maintenance');
-  } else if (filter === 'reserved') {
-      // Show items where at least one unit is rented out
-      list = list.filter(e => (parseInt(e.quantity) - parseInt(e.available_quantity)) > 0);
-  } else if (filter === 'maintenance') {
-      list = list.filter(e => e.status === 'maintenance');
-  }
-
-  const all   = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
-  const avail = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
-  const res   = equipment.reduce((sum, e) => {
+  // ─── 1. TAB HEADER CALCULATIONS ───
+  const allCount   = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+  const availCount = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
+  
+  // Logic: Sum of units currently in farmer hands (excludes units in repair)
+  const resCount   = equipment.reduce((sum, e) => {
       if (e.status !== 'maintenance') {
-          return sum + ((parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0));
+          const unitsOut = (parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0);
+          return sum + Math.max(0, unitsOut);
       }
       return sum;
   }, 0);
-  const maint = equipment.reduce((sum, e) => e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum, 0);
+
+  const maintCount = equipment.reduce((sum, e) => e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum, 0);
+
+  // ─── 2. FILTERING LOGIC (The "Disappearing" Trick) ───
+  if (filter === 'available') {
+      list = list.filter(e => e.available_quantity > 0 && e.status !== 'maintenance');
+  } 
+  else if (filter === 'reserved') {
+      // 🟢 Item DISAPPEARS if unitsOut is 0
+      list = list.filter(e => {
+          const unitsOut = parseInt(e.quantity) - parseInt(e.available_quantity);
+          return unitsOut > 0 && e.status !== 'maintenance';
+      });
+  } 
+  else if (filter === 'maintenance') {
+      list = list.filter(e => e.status === 'maintenance');
+  }
 
   document.getElementById('content').innerHTML = `
     <div class="page-header">
       <div><div class="page-heading">Equipment</div><div class="page-sub">Manage all farm equipment inventory</div></div>
       <button class="btn btn-primary" onclick="showAddEquipment()">＋ Add Equipment</button>
     </div>
+
     <div class="tabs">
-      <button class="tab-btn ${filter==='all'?'active':''}" onclick="pages.equipment('all')">All Units (${all})</button>
-      <button class="tab-btn ${filter==='available'?'active':''}" onclick="pages.equipment('available')">Available (${avail})</button>
-      <button class="tab-btn ${filter==='reserved'?'active':''}" onclick="pages.equipment('reserved')">Reserved (${res})</button>
-      <button class="tab-btn ${filter==='maintenance'?'active':''}" onclick="pages.equipment('maintenance')">In Shop (${maint})</button>
+      <button class="tab-btn ${filter==='all'?'active':''}" onclick="pages.equipment('all')">All Units (${allCount})</button>
+      <button class="tab-btn ${filter==='available'?'active':''}" onclick="pages.equipment('available')">Available (${availCount})</button>
+      <button class="tab-btn ${filter==='reserved'?'active':''}" onclick="pages.equipment('reserved')">Reserved (${resCount})</button>
+      <button class="tab-btn ${filter==='maintenance'?'active':''}" onclick="pages.equipment('maintenance')">In Shop (${maintCount})</button>
     </div>
+
     <div class="equipment-grid">
       ${list.length ? list.map(e => {
+        const unitsOut = parseInt(e.quantity) - parseInt(e.available_quantity);
         const stockColor = e.available_quantity > 0 ? 'var(--accent)' : 'var(--red)';
+        
         return `
         <div class="equip-card">
           <div class="equip-img">⚙️</div>
           <div class="equip-body">
             <div class="equip-name">${e.equipment_name}</div>
             <div class="equip-cat">${e.category} · ${e.location || '—'}</div>
-            <div style="display:flex; gap:8px; align-items:center; margin-top:5px">
+            
+            <div style="display:flex; gap:8px; align-items:center; margin-top:5px; flex-wrap:wrap">
                ${statusBadge(e.status)}
+               
                <span class="badge" style="background:rgba(255,255,255,0.05); border:1px solid ${stockColor}; color:${stockColor}">
                   Stock: ${e.available_quantity} / ${e.quantity}
                </span>
+
+               ${unitsOut > 0 && e.status !== 'maintenance' ? `
+                <span class="badge badge-orange" style="font-weight:700">
+                   🔥 ${unitsOut} Unit(s) Rented
+                </span>
+               ` : ''}
             </div>
-            <div class="equip-meta" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+
+            <div class="equip-meta" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center">
               <span class="equip-price">₱${e.rental_price.toLocaleString()}/day</span>
             </div>
-            <p style="font-size:12px; color:var(--text3); margin-top:6px; line-height:1.4">${e.description || ''}</p>
+            
             <div class="equip-actions">
               <button class="btn btn-ghost btn-sm" onclick="showEditEquipment(${e.equipment_id})">✏ Edit</button>
               <button class="btn btn-ghost btn-sm" onclick="showEquipMaintenance(${e.equipment_id})">🔧 Maintenance</button>
@@ -479,7 +502,7 @@ pages.equipment = async function (filter = 'all') {
             </div>
           </div>
         </div>`;
-      }).join('') : '<div class="empty-state"><div class="empty-icon">⚙️</div>No equipment found</div>'}
+      }).join('') : `<div class="empty-state"><div class="empty-icon">📋</div>No ${filter} equipment found</div>`}
     </div>
   `;
 };
