@@ -2475,6 +2475,7 @@ async function loadNotifications() {
     : '<div class="notif-item">No new notifications</div>';
 }
 
+
 // ==================== LOGIN ====================
 function showLoginPage() {
   document.getElementById('sidebar').style.display = 'none';
@@ -2580,3 +2581,29 @@ if (savedToken) {
 } else {
   showLoginPage();
 }
+// --- NOTIFICATION HELPERS ---
+window.toggleNotifs = function() {
+    const dropdown = document.getElementById('notif-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('open');
+        if (dropdown.classList.contains('open')) loadNotifications();
+    }
+};
+
+window.getDismissed = function() {
+    return JSON.parse(localStorage.getItem('dismissed_notifs') || '[]');
+};
+
+// --- MAP & DELIVERY HELPERS ---
+window.refreshDriverLocations = function() {
+    showToast('Refreshing driver map...', 'info');
+    loadDriverLocations(); // This calls the function we compiled earlier
+};
+
+window.updateDeliveryStatus = async function(id, newStatus) {
+    const res = await API.put(`/deliveries/${id}`, { delivery_status: newStatus });
+    if (res) {
+        showToast(`Delivery updated to ${newStatus}`);
+        pages.deliveries(); // Refresh the table
+    }
+};
