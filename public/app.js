@@ -796,7 +796,7 @@ window.calcAutoDistance = async function() {
         showToast('Format: 7.9063, 125.0942', 'error');
         return;
     }
-
+    const finalKm = result.road_distance_km;
     const lat = parseFloat(parts[0].trim());
     const lng = parseFloat(parts[1].trim());
 
