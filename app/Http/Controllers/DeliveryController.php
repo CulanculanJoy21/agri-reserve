@@ -72,48 +72,49 @@ class DeliveryController extends Controller
     // ── UPDATE STATUS (Syncs with Android "Start/Complete" buttons) ────────────────
     public function update(Request $request, $id)
     {
-        $delivery = Delivery::with('reservation')->findOrFail($id);
+        // Load with reservation and equipment to ensure we can sync statuses
+        $delivery = Delivery::with('reservation.equipment')->findOrFail($id);
         $res = $delivery->reservation; 
 
         $newDeliveryStatus = $request->input('delivery_status', $delivery->delivery_status);
 
-        // 🟢 FIX FOR MAP: If status is shipping, update the User's activity timestamp
-        // This ensures they show up on the "Live Tracking" map immediately.
+        // 1. 🟢 LIVE TRACKING SYNC: If moving, update the User's heartbeat
+        // This ensures the green dot appears on the Admin Map instantly.
         if ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
             $request->user()->update([
                 'location_updated_at' => now(),
-                // If coordinates are sent in this request, save them too
                 'current_lat' => $request->input('latitude', $request->user()->current_lat),
                 'current_lng' => $request->input('longitude', $request->user()->current_lng),
             ]);
         }
 
-        // Calculate fee safely
+        // 2. Safe calculation of delivery fee
         $dist = $request->input('distance_km', $delivery->distance_km);
         $price = $request->input('price_per_km', $delivery->price_per_km);
         $newFee = $dist * $price;
 
+        // 3. Update the Delivery Record
         $delivery->update([
-            'driver_id'       => $request->input('driver_id', $delivery->driver_id),
-            'distance_km'     => $dist,
-            'price_per_km'    => $price,
-            'delivery_fee'    => $newFee,
-            'delivery_status' => $newDeliveryStatus,
-            'delivery_date'   => $request->input('delivery_date', $delivery->delivery_date),
+            'driver_id'        => $request->input('driver_id', $delivery->driver_id),
+            'distance_km'      => $dist,
+            'price_per_km'     => $price,
+            'delivery_fee'     => $newFee,
+            'delivery_status'  => $newDeliveryStatus,
+            'delivery_date'    => $request->input('delivery_date', $delivery->delivery_date),
             'delivery_address' => $res ? $res->delivery_address : $delivery->delivery_address,
-            'latitude'         => $res ? $res->latitude : $delivery->latitude,
-            'longitude'        => $res ? $res->longitude : $delivery->longitude,
+            'latitude'         => $request->input('latitude', $delivery->latitude),
+            'longitude'        => $request->input('longitude', $delivery->longitude),
         ]);
 
-        // Logic for Reservation Status Sync
+        // 4. 🟢 RESERVATION LIFECYCLE SYNC
         if ($newDeliveryStatus === 'delivered') {
+            // We keep the status as 'assigned' (With Farmer)
+            // This keeps the Return Button visible in app.js and keeps the equipment in "Reserved"
             if ($res) {
-                $res->update(['status' => 'completed']);
-                if ($res->equipment) {
-                    $res->equipment->update(['status' => 'available']);
-                }
+                $res->update(['status' => 'assigned']);
             }
-        } elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
+        } 
+        elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
             if ($res) {
                 $res->update(['status' => 'assigned']);
             }
@@ -124,7 +125,6 @@ class DeliveryController extends Controller
             ->find($delivery->delivery_id)
         );
     }
-
     // ── LIVE LOCATION UPDATE (Called by Android GPS Service) ───────────────────────
     public function updateDriverLocation(Request $request)
     {

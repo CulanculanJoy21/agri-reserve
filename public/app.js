@@ -68,32 +68,44 @@ const API = {
 function statusBadge(status) {
   const map = {
     // Equipment Status
-    available: 'badge-green', reserved: 'badge-orange', maintenance: 'badge-red',
+    available: 'badge-green', 
+    reserved: 'badge-orange', 
+    maintenance: 'badge-red',
     
     // Reservation Status
     pending: 'badge-yellow', 
     approved: 'badge-green', 
-    assigned: 'badge-blue', 
+    assigned: 'badge-blue',   // Represented as "With Farmer"
+    completed: 'badge-green', // Represented as "Returned"
     rejected: 'badge-red',
-    cancelled: 'badge-gray', // 🟢 ADDED: Neutral color for user-initiated cancellation
-    completed: 'badge-blue', 
+    cancelled: 'badge-gray', 
     
     // Delivery Status
-    in_transit: 'badge-orange', delivered: 'badge-green',
+    in_transit: 'badge-orange', 
+    delivered: 'badge-blue',
     
-    // Roles
-    farmer: 'badge-blue', driver: 'badge-purple', admin: 'badge-gray',
-    
-    // Types
-    pickup: 'badge-blue', delivery: 'badge-purple'
+    // Roles & Types
+    farmer: 'badge-blue', 
+    driver: 'badge-purple', 
+    admin: 'badge-gray',
+    pickup: 'badge-blue', 
+    delivery: 'badge-purple'
   };
 
   if (!status) return '';
   
-  // .toUpperCase() makes the badges look more professional like a dashboard
-  return `<span class="badge ${map[status] || 'badge-gray'}">${status.replace('_', ' ').toUpperCase()}</span>`;
+  // 🟢 LOGIC OVERRIDE: Human-friendly status text for the dashboard
+  let displayText = status;
+
+  if (status === 'assigned') displayText = 'With Farmer';
+  if (status === 'completed') displayText = 'Returned';
+  if (status === 'delivered') displayText = 'Item Delivered';
+  if (status === 'in_transit') displayText = 'On the Road';
+
+  return `<span class="badge ${map[status] || 'badge-gray'}">${displayText.replace('_', ' ').toUpperCase()}</span>`;
 }
 
+// Keep your existing helpers as they were
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -101,6 +113,7 @@ function formatDate(d) {
 
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.className = `toast show ${type}`;
   setTimeout(() => t.className = 'toast', 3000);
@@ -118,62 +131,18 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
-}
-
-function toggleNotifs() {
-  const dropdown = document.getElementById('notif-dropdown');
-  dropdown.classList.toggle('open');
-  if (dropdown.classList.contains('open')) {
-    loadNotifications();
-    
-  }
-}
-function getDismissed() {
-  return JSON.parse(localStorage.getItem('dismissed_notifs') || '[]');
-}
-
-function saveDismissed(list) {
-  localStorage.setItem('dismissed_notifs', JSON.stringify(list));
-}
-
-function dismissNotif(key) {
-  const dismissed = getDismissed();
-  if (!dismissed.includes(key)) dismissed.push(key);
-  saveDismissed(dismissed);
-  loadNotifications();
-}
-
-function clearAllNotifs() {
-  // Save all current notif keys as dismissed
-  if (window._notifs) {
-    const keys = window._notifs.map(n => n.key);
-    saveDismissed(keys);
-  }
-  const list = document.getElementById('notif-list');
-  if (list) list.innerHTML = '<div class="notif-item">No new notifications</div>';
-  const badge = document.getElementById('notif-count');
-  if (badge) badge.style.display = 'none';
-  toggleNotifs();
-}
-
 function showLoading() {
   document.getElementById('content').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:16px;padding-top:8px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
         ${[1,2,3,4].map(() => `
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;animation:pulse 1.5s infinite">
+          <div class="card" style="padding:20px;animation:pulse 1.5s infinite">
             <div style="height:12px;background:var(--border);border-radius:4px;width:60%;margin-bottom:12px"></div>
             <div style="height:32px;background:var(--border);border-radius:4px;width:40%;margin-bottom:8px"></div>
-            <div style="height:10px;background:var(--border);border-radius:4px;width:80%"></div>
           </div>
         `).join('')}
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;animation:pulse 1.5s infinite">
-        <div style="height:14px;background:var(--border);border-radius:4px;width:30%;margin-bottom:16px"></div>
-        <div style="height:200px;background:var(--border);border-radius:4px;"></div>
-      </div>
+      <div class="card" style="height:300px;animation:pulse 1.5s infinite"></div>
     </div>
   `;
 }
@@ -695,10 +664,17 @@ async function saveEquipMaintenance(equipId) {
 // ---- RESERVATIONS ----
 pages.reservations = async function (filterStatus = 'all') {
   showLoading();
+  
+  // 1. Fetch fresh data from your Laravel API
   const reservations = await API.get('/reservations') || [];
   let list = [...reservations];
-  if (filterStatus !== 'all') list = list.filter(r => r.status === filterStatus);
+  
+  // 2. Filter the list based on the active tab
+  if (filterStatus !== 'all') {
+      list = list.filter(r => r.status === filterStatus);
+  }
  
+  // 3. Calculate Tab Counts
   const counts = {
     all:       reservations.length,
     pending:   reservations.filter(r => r.status === 'pending').length,
@@ -706,49 +682,57 @@ pages.reservations = async function (filterStatus = 'all') {
     assigned:  reservations.filter(r => r.status === 'assigned').length,
     rejected:  reservations.filter(r => r.status === 'rejected').length,
     completed: reservations.filter(r => r.status === 'completed').length,
-    cancelled: reservations.filter(r => r.status === 'cancelled').length, // added for count sync
+    cancelled: reservations.filter(r => r.status === 'cancelled').length,
   };
  
+  // 4. Render the UI
   document.getElementById('content').innerHTML = `
     <div class="page-header">
-      <div><div class="page-heading">Reservations</div><div class="page-sub">Manage all farmer equipment reservations</div></div>
+      <div>
+        <div class="page-heading">Reservations</div>
+        <div class="page-sub">Manage all farmer equipment reservations</div>
+      </div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="exportReservations()">⬇ Export</button>
+        <button class="btn btn-ghost" onclick="exportReservations()">⬇ Export CSV</button>
         <button class="btn btn-primary" onclick="showAddReservation()">＋ New Reservation</button>
       </div>
     </div>
+
     <div class="tabs">
       ${['all','pending','approved','assigned','rejected','completed','cancelled'].map(s => `
-        <button class="tab-btn ${filterStatus===s?'active':''}" onclick="pages.reservations('${s}')">
-          ${s.charAt(0).toUpperCase()+s.slice(1)} (${counts[s] || 0})
+        <button class="tab-btn ${filterStatus === s ? 'active' : ''}" 
+                onclick="pages.reservations('${s}')">
+          ${s.charAt(0).toUpperCase() + s.slice(1)} (${counts[s] || 0})
         </button>
       `).join('')}
     </div>
+
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>#</th>
+              <th>ID</th>
               <th>Farmer</th>
               <th>Equipment</th>
-              <th>Start</th>
-              <th>End</th>
+              <th>Start Date</th>
+              <th>End Date</th>
               <th>Type</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            ${list.length ? list.map(r => `<tr>
+            ${list.length ? list.map(r => `
+            <tr>
               <td><strong>#R${r.reservation_id}</strong></td>
               <td>
                 <strong>${r.farmer ? r.farmer.name : '—'}</strong>
-                <br><span style="font-size:11px;color:var(--text3)">${r.farmer ? r.farmer.phone : ''}</span>
+                <br><small style="color:var(--text3)">${r.farmer ? r.farmer.phone : ''}</small>
               </td>
               <td>
                 ${r.equipment ? r.equipment.equipment_name : '—'}
-                <br><span style="font-size:11px;color:var(--text3)">${r.equipment ? r.equipment.category : ''}</span>
+                <br><small style="color:var(--text3)">${r.equipment ? r.equipment.category : ''}</small>
               </td>
               <td>${formatDate(r.start_date)}</td>
               <td>${formatDate(r.end_date)}</td>
@@ -756,7 +740,9 @@ pages.reservations = async function (filterStatus = 'all') {
               <td>${statusBadge(r.status)}</td>
               <td>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-                  <button class="btn btn-ghost btn-sm btn-icon" onclick="viewReservation(${r.reservation_id})" title="View">👁</button>
+                  
+                  <button class="btn btn-ghost btn-sm btn-icon" 
+                          onclick="viewReservation(${r.reservation_id})" title="View Details">👁</button>
  
                   ${r.status === 'pending' ? `
                     <button class="btn btn-primary btn-sm" onclick="approveReservation(${r.reservation_id})">✓ Approve</button>
@@ -773,14 +759,26 @@ pages.reservations = async function (filterStatus = 'all') {
                     `}
                   ` : ''}
  
-                  ${r.status === 'assigned' ? `<span class="badge badge-blue" style="padding:6px 12px">✓ Driver Assigned</span>` : ''}
- 
-                  ${r.status === 'completed' || r.status === 'rejected' || r.status === 'cancelled' ? `
-                    <button class="btn btn-danger btn-sm" onclick="deleteReservation(${r.reservation_id})" title="Delete">🗑</button>
+                  ${r.status === 'assigned' ? `
+                    <span class="badge badge-blue" style="padding:6px 12px">✓ Driver Assigned</span>
                   ` : ''}
+ 
+                  ${['completed', 'rejected', 'cancelled'].includes(r.status) ? `
+                    <button class="btn btn-danger btn-sm" 
+                            onclick="deleteReservation(${r.reservation_id})" title="Delete Record">🗑</button>
+                  ` : ''}
+
                 </div>
               </td>
-            </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div>No reservations found</div></td></tr>`}
+            </tr>`).join('') : `
+              <tr>
+                <td colspan="8">
+                  <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    No ${filterStatus} reservations found
+                  </div>
+                </td>
+              </tr>`}
           </tbody>
         </table>
       </div>
@@ -848,43 +846,84 @@ async function viewReservation(id) {
     if (!r) return;
 
     const delivery = r.delivery;
-    const qty = r.reserved_quantity || 1;
-    const grandTotal = r.grand_total || 0;
+    const feedback = r.feedback;
+
+    // 1. 💰 Dynamic Cost Calculation
+    const totalDays   = r.total_days || 0;
+    const qty         = r.reserved_quantity || 1;
+    const pricePerDay = r.equipment?.rental_price || 0;
+    
+    // Use Laravel virtual fields if available, otherwise fallback to JS math
+    const rentalCost  = r.rental_total || (totalDays * qty * pricePerDay);
+    const deliveryFee = r.shipping_fee || (delivery ? delivery.delivery_fee : 0);
+    const grandTotal  = rentalCost + deliveryFee;
+
+    // 2. 🚜 Identify "With Farmer" State
+    // If assigned and delivered, it means the farmer has the item now.
+    const isWithFarmer = r.status === 'assigned' && delivery?.delivery_status === 'delivered';
 
     openModal(`Reservation #R${id} Details`, `
         <div style="display:flex;flex-direction:column;gap:14px">
+
+            <div style="padding:12px; border-radius:10px; text-align:center; background:var(--bg3); border:1px solid ${isWithFarmer ? 'var(--accent)' : 'var(--border)'}">
+                <div style="font-size:11px; color:var(--text3); margin-bottom:4px">CURRENT STATUS</div>
+                <div style="font-weight:800; color:${isWithFarmer ? 'var(--accent)' : 'var(--text1)'}">
+                    ${isWithFarmer ? '🚜 EQUIPMENT CURRENTLY WITH FARMER' : 
+                      r.status === 'completed' ? '✅ RESERVATION COMPLETED & RETURNED' : 
+                      '📋 ' + r.status.toUpperCase()}
+                </div>
+            </div>
+
             <div class="card" style="background:var(--bg3)">
                 <div class="section-divider">👤 Farmer Info</div>
                 <div><strong>${r.farmer?.name || '—'}</strong></div>
                 <div style="font-size:12px;color:var(--text3)">${r.farmer?.phone || ''}</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px">📍 ${r.farmer?.address || 'No address'}</div>
             </div>
 
             <div class="card" style="background:var(--bg3)">
                 <div class="section-divider">⚙️ Equipment Info</div>
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div><strong>${r.equipment?.equipment_name || '—'}</strong></div>
-                    <div style="font-size:18px;font-weight:800;color:var(--accent)">${qty} Unit(s)</div>
+                    <div>
+                        <strong>${r.equipment?.equipment_name || '—'}</strong>
+                        <div style="font-size:11px;color:var(--text3)">${r.equipment?.category || ''}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-size:18px;font-weight:800;color:var(--accent)">${qty} Unit(s)</div>
+                        <div style="font-size:11px;color:var(--text3)">₱${pricePerDay.toLocaleString()}/day</div>
+                    </div>
                 </div>
             </div>
 
             <div class="card" style="background:var(--bg3)">
                 <div class="section-divider">💰 Financial Summary</div>
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span>GRAND TOTAL</span>
-                    <span style="font-size:22px;font-weight:800;color:var(--accent)">₱${grandTotal.toLocaleString()}</span>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text3)">Rental (${totalDays}d)</span>
+                        <span>₱${rentalCost.toLocaleString()}</span>
+                    </div>
+                    ${delivery ? `
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text3)">Shipping Fee</span>
+                        <span>₱${deliveryFee.toLocaleString()}</span>
+                    </div>` : ''}
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+                        <span style="font-weight:700">GRAND TOTAL</span>
+                        <span style="font-size:22px;font-weight:800;color:var(--accent)">₱${grandTotal.toLocaleString()}</span>
+                    </div>
                 </div>
             </div>
 
             ${(r.status === 'approved' || r.status === 'assigned') && r.status !== 'completed' ? `
             <div style="padding:15px; background:rgba(74,222,128,0.1); border-radius:10px; border:1px solid var(--accent); text-align:center; margin-top:10px">
-                <p style="font-size:12px; color:var(--text2); margin-bottom:10px">Mark as returned to inventory?</p>
+                <p style="font-size:12px; color:var(--text2); margin-bottom:10px">Has the farmer physically returned the equipment?</p>
                 <button class="btn btn-primary" onclick="returnEquipment(${id})" style="width:100%">
                     ✅ Confirm Equipment Return
                 </button>
             </div>
             ` : ''}
 
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center">
                 ${statusBadge(r.status)}
                 ${r.returned_at ? `<span class="badge badge-green">Returned: ${formatDate(r.returned_at)}</span>` : ''}
             </div>
@@ -897,17 +936,29 @@ async function viewReservation(id) {
 
 // ── RETURN EQUIPMENT (Update Inventory Stock) ──
 async function returnEquipment(id) {
-    if (!confirm('Confirm return? This will add the units back to available stock.')) return;
+    if (!confirm('Confirm that the equipment has been physically returned? \n\nThis will mark the reservation as COMPLETED and restore the units to available stock.')) return;
     
-    showToast('Updating stock...', 'info');
+    showToast('Updating inventory stock...', 'info');
+    
+    // 1. Hit the backend: Route::put('/reservations/{id}/return')
     const result = await API.put(`/reservations/${id}/return`, {});
     
+    // 2. Check for success (either status is completed or no error message)
     if (result && (result.status === 'completed' || !result.message)) {
-        showToast('Inventory updated! Reservation completed. ✓');
+        showToast('Inventory updated successfully! ✓');
         closeModal();
+        
+        // 3. 🔄 REFRESH DATA: Ensure the UI reflects the new stock immediately
         if (currentPage === 'reservations') pages.reservations();
+        if (currentPage === 'dashboard') pages.dashboard();
+        if (currentPage === 'equipment') pages.equipment();
+        
+        // 4. Update the notification bell (clears "Overdue" alerts for this item)
+        loadNotifications(); 
+        
     } else {
-        showToast('Error processing return.', 'error');
+        // Handle specific error messages from Laravel (like 'Reservation not found')
+        showToast(result?.message || 'Failed to process return. Check server connection.', 'error');
     }
 }
 
