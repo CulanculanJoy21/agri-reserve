@@ -790,66 +790,50 @@ window.calcAutoDistance = async function() {
     const input = document.getElementById('calc-address')?.value.trim();
     if (!input) { showToast('Enter coordinates', 'error'); return; }
 
-    showToast('Calculating road distance...', 'info');
-    
-    // Split "7.9, 125" into separate variables
-    const parts = input.split(',');
-    const lat = parts[0]?.trim();
-    const lng = parts[1]?.trim();
-    
-    const result = await calculateDistance(lat, lng, null);
+    // 1. Get the data from your API
+    const result = await calculateDistance(input.split(',')[0], input.split(',')[1], null);
 
     if (result) {
-        // 🟢 THE FIX: Create one reliable number. 
-        // Checks 'road_distance_km', then 'km', then 'straight_line_km'
-        const finalKm = result.road_distance_km || result.km || result.straight_line_km || 0;
-        const duration = result.duration_text || result.duration || "N/A";
+        // 🟢 THE KEY: Your API uses 'road_distance_km'. We save it to a constant.
+        const kmValue = result.road_distance_km || 0;
 
-        // 1. Update the Labels (The green text)
-        const kmLabel = document.getElementById('calc-auto-km');
-        const timeLabel = document.getElementById('calc-auto-duration');
-        if (kmLabel) kmLabel.textContent = `${finalKm} km`;
-        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${duration}`;
-
-        // 2. Update the Input Field (The hidden/visible box)
+        // 2. Put the number into the Distance (KM) input box
         const distInput = document.getElementById('calc-dist') || document.getElementById('distance_km');
         if (distInput) {
-            distInput.value = finalKm; 
+            distInput.value = kmValue; 
             
-            // 🟢 CRITICAL: Force the math to run now
+            // 🟢 THE TRIGGER: Now that the box has a number, run the math!
             window.calcDeliveryFee(); 
         }
+
+        // 3. Update the labels so the UI looks correct
+        if (document.getElementById('calc-auto-km')) {
+            document.getElementById('calc-auto-km').textContent = `${kmValue} km`;
+        }
         
-        showToast(`Distance fetched: ${finalKm} km`);
-    } else {
-        showToast('Calculation failed', 'error');
+        showToast(`Distance synced: ${kmValue} km`);
     }
 };
 
 window.calcDeliveryFee = function() {
-    const distEl = document.getElementById('calc-dist') || document.getElementById('distance_km');
-    const priceEl = document.getElementById('calc-price-per-km') || document.getElementById('price_per_km');
-    const displayEl = document.getElementById('calc-fee-display') || document.getElementById('estimated-fee');
+    const d = document.getElementById('calc-dist') || document.getElementById('distance_km');
+    const p = document.getElementById('calc-price-per-km') || document.getElementById('price_per_km');
+    const display = document.getElementById('calc-fee-display') || document.getElementById('estimated-fee');
 
-    if (!distEl || !displayEl) return;
+    if (!d || !display) return;
 
-    // Get values, default to 0 if empty or undefined
-    const km = parseFloat(distEl.value) || 0;
-    const price = priceEl ? (parseFloat(priceEl.value) || 25) : 25;
+    // Get the KM from the box we just filled
+    const km = parseFloat(d.value) || 0;
+    // Get the price (default to 25 if the box is missing)
+    const price = p ? (parseFloat(p.value) || 25) : 25;
     
     const total = km * price;
 
-    // Update the big green ₱ amount
-    displayEl.textContent = `₱${total.toLocaleString(undefined, {
+    // 💰 UPDATE THE BIG GREEN PRICE
+    display.textContent = `₱${total.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     })}`;
-
-    // 🟢 OPTIONAL: Update the small "Formula" text if you have it
-    const formula = document.querySelector('.delivery-fee-card small');
-    if (formula) {
-        formula.textContent = `Formula: ${km}km × ₱${price}/km`;
-    }
 };
 window.toggleNotifs = function() {
     const dropdown = document.getElementById('notif-dropdown');
