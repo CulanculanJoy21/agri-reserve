@@ -838,16 +838,36 @@ async function calcAutoDistance() {
 
 // 🟢 Ensure the fee calculation function is robust
 window.calcDeliveryFee = function() {
-    const km = parseFloat(document.getElementById('calc-dist').value) || 0;
-    const price = parseFloat(document.getElementById('calc-price-per-km').value) || 25; // default 25
-    
+    // 1. Grab the elements
+    const distEl = document.getElementById('calc-dist');
+    const priceEl = document.getElementById('calc-price-per-km');
+    const displayEl = document.getElementById('calc-fee-display');
+
+    // 2. 🛡️ Safety Check: If any part is missing, don't run the math
+    if (!distEl || !priceEl) {
+        console.warn("Calculation fields not found in the current view.");
+        return; 
+    }
+
+    // 3. Get values and perform math
+    const km = parseFloat(distEl.value) || 0;
+    const price = parseFloat(priceEl.value) || 0;
     const total = km * price;
     
-    const display = document.getElementById('calc-fee-display');
-    if (display) {
-        display.textContent = `₱${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    // 4. Update the display if it exists
+    if (displayEl) {
+        displayEl.textContent = `₱${total.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
     }
 }
+window.showLogout = function() {
+    if (confirm("Are you sure you want to log out of AgriReserve?")) {
+        localStorage.clear();
+        window.location.href = '/login'; // or your login route
+    }
+};
 
 async function cancelReservation(id) {
   if (!confirm('Cancel this reservation? The equipment will be freed up.')) return;
