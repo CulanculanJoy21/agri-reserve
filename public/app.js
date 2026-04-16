@@ -788,52 +788,78 @@ pages.reservations = async function (filterStatus = 'all') {
 
 window.calcAutoDistance = async function() {
     const input = document.getElementById('calc-address')?.value.trim();
-    if (!input) { showToast('Enter coordinates', 'error'); return; }
+    if (!input) { showToast('Enter coordinates (lat, lng)', 'error'); return; }
 
-    // 1. Get the data from your API
-    const result = await calculateDistance(input.split(',')[0], input.split(',')[1], null);
+    // Parse coordinates
+    const parts = input.split(',');
+    if (parts.length < 2) {
+        showToast('Format: 7.9063, 125.0942', 'error');
+        return;
+    }
+
+    const lat = parseFloat(parts[0].trim());
+    const lng = parseFloat(parts[1].trim());
+
+    if (isNaN(lat) || isNaN(lng)) {
+        showToast('Invalid coordinates. Example: 7.9063, 125.0942', 'error');
+        return;
+    }
+
+    showToast('Calculating distance from base...', 'info');
+
+    const result = await calculateDistance(lat, lng, null);
 
     if (result) {
-        // 🟢 THE KEY: Your API uses 'road_distance_km'. We save it to a constant.
-        const kmValue = result.road_distance_km || 0;
+        const km = result.km;
 
-        // 2. Put the number into the Distance (KM) input box
-        const distInput = document.getElementById('calc-dist') || document.getElementById('distance_km');
+        // Fill distance input — try both possible IDs
+        const distInput = document.getElementById('calc-dist');
         if (distInput) {
-            distInput.value = kmValue; 
-            
-            // 🟢 THE TRIGGER: Now that the box has a number, run the math!
-            window.calcDeliveryFee(); 
+            distInput.value = km;
+            distInput.dispatchEvent(new Event('input'));
         }
 
-        // 3. Update the labels so the UI looks correct
-        if (document.getElementById('calc-auto-km')) {
-            document.getElementById('calc-auto-km').textContent = `${kmValue} km`;
-        }
-        
-        showToast(`Distance synced: ${kmValue} km`);
+        // Update display labels
+        const kmLabel    = document.getElementById('calc-auto-km');
+        const durLabel   = document.getElementById('calc-auto-duration');
+        const autoResult = document.getElementById('calc-auto-result');
+
+        if (kmLabel)    kmLabel.textContent    = `${km} km`;
+        if (durLabel)   durLabel.textContent   = `🕐 Drive time: ${result.duration}`;
+        if (autoResult) autoResult.style.display = 'block';
+
+        // Calculate fee
+        window.calcDeliveryFee();
+
+        showToast(`Distance: ${km} km · ${result.duration}`);
+    } else {
+        showToast('Could not calculate. Check your coordinates.', 'error');
     }
 };
 
 window.calcDeliveryFee = function() {
-    const d = document.getElementById('calc-dist') || document.getElementById('distance_km');
-    const p = document.getElementById('calc-price-per-km') || document.getElementById('price_per_km');
-    const display = document.getElementById('calc-fee-display') || document.getElementById('estimated-fee');
+    // Support both possible element IDs
+    const distEl    = document.getElementById('calc-dist');
+    const rateEl    = document.getElementById('calc-rate')
+                   || document.getElementById('calc-price-per-km');
+    const resultEl  = document.getElementById('calc-result')
+                   || document.getElementById('calc-fee-display');
+    const formulaEl = document.getElementById('calc-formula');
 
-    if (!d || !display) return;
+    if (!distEl || !resultEl) return;
 
-    // Get the KM from the box we just filled
-    const km = parseFloat(d.value) || 0;
-    // Get the price (default to 25 if the box is missing)
-    const price = p ? (parseFloat(p.value) || 25) : 25;
-    
+    const km    = parseFloat(distEl.value)  || 0;
+    const price = parseFloat(rateEl?.value) || 25;
     const total = km * price;
 
-    // 💰 UPDATE THE BIG GREEN PRICE
-    display.textContent = `₱${total.toLocaleString(undefined, {
+    resultEl.textContent = `₱${total.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     })}`;
+
+    if (formulaEl) {
+        formulaEl.textContent = `Formula: ${km}km × ₱${price}/km`;
+    }
 };
 window.toggleNotifs = function() {
     const dropdown = document.getElementById('notif-dropdown');
