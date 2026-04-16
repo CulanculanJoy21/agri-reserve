@@ -788,54 +788,58 @@ pages.reservations = async function (filterStatus = 'all') {
 
 window.calcAutoDistance = async function() {
     const input = document.getElementById('calc-address')?.value.trim();
-    if (!input) { showToast('Enter coordinates (lat, lng)', 'error'); return; }
-
-    let lat = null, lng = null;
-    const coordPattern = /^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/;
-    const match = input.match(coordPattern);
-
-    if (match) {
-        lat = parseFloat(match[1]);
-        lng = parseFloat(match[2]);
-        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-            showToast('Invalid coordinates. Check decimals.', 'error');
-            return;
-        }
-    } else {
-        showToast('Use format: 7.9063, 125.0942', 'error');
-        return;
-    }
+    if (!input) { showToast('Enter coordinates', 'error'); return; }
 
     showToast('Calculating road distance...', 'info');
     
-    // Call your backend OSRM service
+    // We parse the lat/lng from your input "7.9, 125"
+    const [lat, lng] = input.split(',').map(s => s.trim());
+    
+    // Call your backend
     const result = await calculateDistance(lat, lng, null);
 
     if (result) {
-        // 1. Update text labels in the UI
+        // 🟢 THE FIX: Use 'road_distance_km' instead of 'km'
+        const distValue = result.road_distance_km || result.km; 
+        const durationValue = result.duration_text || result.duration;
+
+        // Update the Green Labels
         const kmLabel = document.getElementById('calc-auto-km');
         const timeLabel = document.getElementById('calc-auto-duration');
-        const resBox = document.getElementById('calc-auto-result');
+        if (kmLabel) kmLabel.textContent = `${distValue} km`;
+        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${durationValue}`;
 
-        if (resBox) resBox.style.display = 'block';
-        
-        // Match the exact key from your Laravel response: road_distance_km
-        if (kmLabel) kmLabel.textContent = `${result.road_distance_km} km`;
-        if (timeLabel) timeLabel.textContent = `🕐 Drive time: ${result.duration_text}`;
-
-        // 2. Try to find the input field to fill (supports multiple ID patterns)
-        const distInput = document.getElementById('calc-dist') || document.getElementById('distance_km');
-        
+        // Update the Input Field and trigger Math
+        const distInput = document.getElementById('calc-dist');
         if (distInput) {
-            distInput.value = result.road_distance_km;
-            // Force the fee calculation to run now that we have a distance
+            distInput.value = distValue; 
+            // 🟢 Manual trigger to fix the ₱0.00
             window.calcDeliveryFee();
         }
-
-        showToast(`Distance: ${result.road_distance_km} km`);
+        
+        showToast(`Distance fetched: ${distValue} km`);
+    } else {
+        showToast('Calculation failed', 'error');
     }
 };
 
+// 3. Robust Fee Calculation
+window.calcDeliveryFee = function() {
+    const d = document.getElementById('calc-dist');
+    const p = document.getElementById('calc-price-per-km');
+    const display = document.getElementById('calc-fee-display');
+
+    if (!d || !p || !display) return;
+
+    const km = parseFloat(d.value) || 0;
+    const price = parseFloat(p.value) || 0;
+    const total = km * price;
+
+    display.textContent = `₱${total.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })}`;
+};
 window.calcDeliveryFee = function() {
     // Looks for common ID patterns used in your Laravel/Android views
     const distEl = document.getElementById('calc-dist') || document.getElementById('distance_km');
@@ -858,20 +862,14 @@ window.calcDeliveryFee = function() {
 };
 window.toggleNotifs = function() {
     const dropdown = document.getElementById('notif-dropdown');
-    const badge = document.getElementById('notif-count');
-
-    if (!dropdown) return;
-
-    // Toggle visibility
-    const isActive = dropdown.classList.toggle('active');
-
-    if (isActive) {
-        // Refresh data when opened
-        if (typeof loadNotifications === 'function') {
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+        // Refresh notifications when opened
+        if (dropdown.classList.contains('active') && typeof loadNotifications === 'function') {
             loadNotifications();
         }
-        // Optional: Hide badge once the user looks at the list
-        if (badge) badge.style.display = 'none';
+    } else {
+        console.error("Could not find 'notif-dropdown' element in HTML.");
     }
 };
 
