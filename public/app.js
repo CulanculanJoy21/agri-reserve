@@ -812,9 +812,9 @@ window.calcAutoDistance = async function() {
         // Update the Input Field and trigger Math
         const distInput = document.getElementById('calc-dist');
         if (distInput) {
-            distInput.value = distValue; 
-            // 🟢 Manual trigger to fix the ₱0.00
-            window.calcDeliveryFee();
+            distInput.value = result.road_distance_km; // This puts the 13.5 in the box
+            
+            window.calcDeliveryFee(); 
         }
         
         showToast(`Distance fetched: ${distValue} km`);
@@ -905,6 +905,44 @@ window.dismissNotif = function(key) {
         loadNotifications();
     }
     showToast("Notification cleared");
+};
+window.clearAllNotifs = function() {
+    // 1. Check if we have any notifications loaded
+    const notifs = window._notifs || [];
+    if (notifs.length === 0) {
+        showToast("No notifications to clear", "info");
+        return;
+    }
+
+    if (confirm("Are you sure you want to clear all notifications?")) {
+        // 2. Get the current dismissed list
+        const dismissed = window.getDismissed ? window.getDismissed() : [];
+
+        // 3. Add every current notification key to the dismissed list
+        notifs.forEach(n => {
+            if (n.key && !dismissed.includes(n.key)) {
+                dismissed.push(n.key);
+            }
+        });
+
+        // 4. Save the updated list back to Local Storage
+        if (window.saveDismissed) {
+            window.saveDismissed(dismissed);
+        } else {
+            localStorage.setItem('dismissed_notifs', JSON.stringify(dismissed));
+        }
+
+        // 5. Refresh the UI
+        if (typeof loadNotifications === 'function') {
+            loadNotifications();
+        }
+        
+        // 6. Close the dropdown and show success
+        const dropdown = document.getElementById('notif-dropdown');
+        if (dropdown) dropdown.classList.remove('active');
+        
+        showToast("All notifications cleared");
+    }
 };
 
 
