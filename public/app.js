@@ -2712,17 +2712,19 @@ async function showLogout() {
 }
 // Start this when the admin opens the tracking tab
 function startLiveTracking() {
-    // Check for movement every 5 seconds
+    // 🟢 Changed from 5000 to 600000 (10 minutes)
+    // This fetches the driver's coordinates from the Cloud every 10 mins
     setInterval(async () => {
-        // 1. Get the list of deliveries that are 'in_transit'
-        const activeDeliveries = await API.get('/deliveries/active'); 
-        
-        if (activeDeliveries) {
-            // 2. Refresh the map markers using the function we fixed earlier
-            // This moves the marker to the new current_lat/lng in the DB
-            loadDriverLocations(activeDeliveries);
+        try {
+            const activeDeliveries = await API.get('/deliveries/active'); 
+            if (activeDeliveries && activeDeliveries.length > 0) {
+                // This moves the green dot to the new spot
+                loadDriverLocations(activeDeliveries);
+            }
+        } catch (error) {
+            console.error("Dashboard failed to fetch live location:", error);
         }
-    }, 5000); 
+    }, 600000); 
 }
 // Change this at the bottom of your file
 window.centerOnDriver = function(lat, lng, name) {
@@ -2788,17 +2790,17 @@ window.dismissNotif = function(key) {
 };
 window.toggleSidebar = function() {
     const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('main-content'); // Optional: if your main content shifts
-
-    // Toggle between a "collapsed" width and "expanded" width
-    // Adjust these classes based on your CSS (e.g., 'w-16' vs 'w-64')
+    const main = document.getElementById('main');
+    
+    // Check if the sidebar is currently expanded
+    // Adjust 'w-64' and 'w-20' to match the widths you used before
     if (sidebar.classList.contains('w-64')) {
-        sidebar.classList.remove('w-64');
-        sidebar.classList.add('w-20'); // Minimized state
+        sidebar.classList.replace('w-64', 'w-20');
+        if(main) main.style.marginLeft = '80px'; // Shift main content
         sidebar.setAttribute('data-collapsed', 'true');
     } else {
-        sidebar.classList.remove('w-20');
-        sidebar.classList.add('w-64'); // Expanded state
+        sidebar.classList.replace('w-20', 'w-64');
+        if(main) main.style.marginLeft = '256px'; // Shift main content back
         sidebar.setAttribute('data-collapsed', 'false');
     }
 };
