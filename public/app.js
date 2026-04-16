@@ -1898,8 +1898,8 @@ async function loadDriverLocations() {
                         <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
                         <div style="font-size:11px;color:var(--text3)">📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}</div>
                     </div>
-                </div>
-                <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">🎯 Focus</button>
+                </div>   
+                <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.id}')">🎯 Focus</button>
             </div>`).join('');
     }
 }
@@ -1930,15 +1930,17 @@ window.updateDeliveryStatus = async function(deliveryId, newStatus) {
     const confirmMsg = `Are you sure you want to mark Delivery #D${deliveryId} as ${newStatus.toUpperCase()}?`;
     if (!confirm(confirmMsg)) return;
 
-    const result = await API.post(`/deliveries/${deliveryId}/status`, {
-        status: newStatus
+    // 🟢 CHANGED: Use .put() instead of .post()
+    // 🟢 CHANGED: URL is now just /deliveries/${deliveryId}
+    const result = await API.put(`/deliveries/${deliveryId}`, {
+        delivery_status: newStatus // 🟢 CHANGED: key must be 'delivery_status' to match your DB
     });
 
-    if (result) {
+    if (result && !result.message) {
         showToast('Delivery status updated successfully', 'success');
-        pages.deliveries(); // Refresh the entire view to update stats
+        pages.deliveries(); 
     } else {
-        showToast('Failed to update status', 'error');
+        showToast(result?.message || 'Failed to update status', 'error');
     }
 };
 // ---- MAINTENANCE ----

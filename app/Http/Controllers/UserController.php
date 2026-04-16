@@ -90,16 +90,10 @@ class UserController extends Controller
         return response()->json(['status' => 'success']);
     }
 
-    public function getActiveDriverLocations()
-    {
-        return response()->json(
-            User::where('role', 'driver')
-                ->whereNotNull('current_lat')
-                ->whereNotNull('current_lng')
-                // 🟢 CHANGE: Only show drivers active in the last 2 minutes
-                ->where('location_updated_at', '>=', now()->subMinutes(2)) 
-                ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
-        );
+    public function getActiveDriverLocations() {
+    return User::where('role', 'driver')
+        ->where('location_updated_at', '>=', now()->subSeconds(30)) // 🟢 Strict 30-second window
+        ->get();
     }
     // 🟢 FULL Dashboard Method (Fixed ₱0.00 and Quantity)
     public function farmerDashboard(Request $request)
