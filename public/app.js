@@ -852,166 +852,71 @@ async function deleteReservation(id) {
 }
 
 async function viewReservation(id) {
-  const r = await API.get(`/reservations/${id}`);
-  if (!r) return;
- 
-  const delivery = r.delivery;
-  const feedback = r.feedback;
- 
-  // 🟢 PULLING DIRECTLY FROM LARAVEL VIRTUAL FIELDS (No math here!)
-  const totalDays   = r.total_days || 0;
-  const qty         = r.reserved_quantity || 1;
-  const pricePerDay = r.equipment?.rental_price || 0;
-  
-  const rentalCost  = r.rental_total;  // From getRentalTotalAttribute()
-  const deliveryFee = r.shipping_fee; // From getShippingFeeAttribute()
-  const grandTotal  = r.grand_total;  // From getGrandTotalAttribute()
- 
-  openModal(`Reservation #R${id} Details`, `
-    <div style="display:flex;flex-direction:column;gap:14px">
- 
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">👤 Farmer Info</div>
-        <div class="form-row">
-          <div>
-            <span style="color:var(--text3);font-size:11px">NAME</span>
-            <div><strong>${r.farmer?.name || '—'}</strong></div>
-          </div>
-          <div>
-            <span style="color:var(--text3);font-size:11px">PHONE</span>
-            <div>${r.farmer?.phone || '—'}</div>
-          </div>
-        </div>
-        <div style="margin-top:8px">
-          <span style="color:var(--text3);font-size:11px">ADDRESS</span>
-          <div>${r.farmer?.address || '—'}</div>
-        </div>
-      </div>
- 
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">⚙️ Equipment Info</div>
-        <div style="display:flex;gap:12px;align-items:center">
-          <span style="font-size:36px">⚙️</span>
-          <div>
-            <strong style="font-size:16px">${r.equipment?.equipment_name || '—'}</strong>
-            <div style="font-size:12px;color:var(--text3)">${r.equipment?.category || ''}</div>
-            <div style="color:var(--accent);font-weight:700;margin-top:4px">
-              ₱${pricePerDay.toLocaleString()}/day
+    const r = await API.get(`/reservations/${id}`);
+    if (!r) return;
+
+    const delivery = r.delivery;
+    const qty = r.reserved_quantity || 1;
+    const grandTotal = r.grand_total || 0;
+
+    openModal(`Reservation #R${id} Details`, `
+        <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card" style="background:var(--bg3)">
+                <div class="section-divider">👤 Farmer Info</div>
+                <div><strong>${r.farmer?.name || '—'}</strong></div>
+                <div style="font-size:12px;color:var(--text3)">${r.farmer?.phone || ''}</div>
             </div>
-          </div>
-          <div style="margin-left:auto;text-align:right">
-            <div style="font-size:11px;color:var(--text3)">QUANTITY</div>
-            <div style="font-size:22px;font-weight:800;color:var(--accent)">${qty}</div>
-            <div style="font-size:11px;color:var(--text3)">unit${qty > 1 ? 's' : ''}</div>
-          </div>
+
+            <div class="card" style="background:var(--bg3)">
+                <div class="section-divider">⚙️ Equipment Info</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div><strong>${r.equipment?.equipment_name || '—'}</strong></div>
+                    <div style="font-size:18px;font-weight:800;color:var(--accent)">${qty} Unit(s)</div>
+                </div>
+            </div>
+
+            <div class="card" style="background:var(--bg3)">
+                <div class="section-divider">💰 Financial Summary</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>GRAND TOTAL</span>
+                    <span style="font-size:22px;font-weight:800;color:var(--accent)">₱${grandTotal.toLocaleString()}</span>
+                </div>
+            </div>
+
+            ${(r.status === 'approved' || r.status === 'assigned') && r.status !== 'completed' ? `
+            <div style="padding:15px; background:rgba(74,222,128,0.1); border-radius:10px; border:1px solid var(--accent); text-align:center; margin-top:10px">
+                <p style="font-size:12px; color:var(--text2); margin-bottom:10px">Mark as returned to inventory?</p>
+                <button class="btn btn-primary" onclick="returnEquipment(${id})" style="width:100%">
+                    ✅ Confirm Equipment Return
+                </button>
+            </div>
+            ` : ''}
+
+            <div style="display:flex;gap:8px">
+                ${statusBadge(r.status)}
+                ${r.returned_at ? `<span class="badge badge-green">Returned: ${formatDate(r.returned_at)}</span>` : ''}
+            </div>
         </div>
-      </div>
- 
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">📋 Reservation Details</div>
-        <div class="form-row" style="margin-bottom:10px">
-          <div>
-            <span style="color:var(--text3);font-size:11px">START DATE</span>
-            <div><strong>${formatDate(r.start_date)}</strong></div>
-          </div>
-          <div>
-            <span style="color:var(--text3);font-size:11px">END DATE</span>
-            <div><strong>${formatDate(r.end_date)}</strong></div>
-          </div>
-          <div>
-            <span style="color:var(--text3);font-size:11px">DURATION</span>
-            <div><strong>${totalDays} day${totalDays > 1 ? 's' : ''}</strong></div>
-          </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Close</button>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          ${statusBadge(r.status)}
-          ${statusBadge(r.reservation_type)}
-        </div>
-        ${r.returned_at ? `
-          <div style="font-size:12px;color:var(--accent)">
-            ✓ Returned on ${formatDate(r.returned_at)}
-          </div>` : ''}
-      </div>
- 
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">💰 Cost Breakdown</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
- 
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text3)">Rental (${totalDays}d × ₱${pricePerDay.toLocaleString()} × ${qty} unit${qty>1?'s':''})</span>
-            <span><strong>₱${rentalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></span>
-          </div>
- 
-          ${delivery ? `
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text3)">Delivery Fee (${delivery.distance_km}km × ₱${delivery.price_per_km})</span>
-            <span><strong>₱${deliveryFee.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></span>
-          </div>` : ''}
- 
-          <div style="border-top:1px solid var(--border);padding-top:10px;
-                      display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:700;font-size:14px">GRAND TOTAL</span>
-            <span style="font-size:24px;font-weight:800;color:var(--accent)">
-              ₱${grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
-            </span>
-          </div>
-        </div>
-      </div>
- 
-      ${delivery ? `
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">🚚 Delivery Info</div>
-        <div class="form-row" style="margin-bottom:8px">
-          <div>
-            <span style="color:var(--text3);font-size:11px">DRIVER</span>
-            <div>${delivery.driver?.name || 'Unassigned'}</div>
-          </div>
-          <div>
-            <span style="color:var(--text3);font-size:11px">DISTANCE</span>
-            <div>${delivery.distance_km} km</div>
-          </div>
-        </div>
-        ${delivery.delivery_address ? `
-        <div>
-          <span style="color:var(--text3);font-size:11px">DELIVER TO</span>
-          <div style="font-size:13px">📍 ${delivery.delivery_address}</div>
-        </div>` : ''}
-        <div style="margin-top:8px">${statusBadge(delivery.delivery_status)}</div>
-      </div>` : ''}
- 
-      ${feedback ? `
-      <div class="card" style="background:var(--bg3)">
-        <div class="section-divider">⭐ Farmer Feedback</div>
-        <div class="stars" style="font-size:20px;color:#facc15;margin-bottom:6px">
-          ${'★'.repeat(feedback.rating)}${'☆'.repeat(5-feedback.rating)}
-        </div>
-        <p style="font-size:13px;color:var(--text2);font-style:italic">
-          "${feedback.comments}"
-        </p>
-      </div>` : ''}
- 
-      ${(r.status === 'approved' || r.status === 'assigned') ? `
-      <button class="btn btn-primary" onclick="returnEquipment(${id})" style="width:100%">
-        ✓ Mark Equipment as Returned
-      </button>` : ''}
- 
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
-    </div>
-  `);
+    `);
 }
+
+// ── RETURN EQUIPMENT (Update Inventory Stock) ──
 async function returnEquipment(id) {
-  if (!confirm('Mark this equipment as returned? This will complete the reservation.')) return;
- 
-  const result = await API.put(`/reservations/${id}/return`, {});
-  if (result && result.status === 'completed') {
-    showToast('Equipment marked as returned! ✓');
-    closeModal();
-    pages.reservations();
-  } else {
-    showToast('Failed to mark as returned', 'error');
-  }
+    if (!confirm('Confirm return? This will add the units back to available stock.')) return;
+    
+    showToast('Updating stock...', 'info');
+    const result = await API.put(`/reservations/${id}/return`, {});
+    
+    if (result && (result.status === 'completed' || !result.message)) {
+        showToast('Inventory updated! Reservation completed. ✓');
+        closeModal();
+        if (currentPage === 'reservations') pages.reservations();
+    } else {
+        showToast('Error processing return.', 'error');
+    }
 }
 
 async function approveReservation(id) {
@@ -1734,25 +1639,24 @@ function initTrackingMap(activeDeliveries) {
  
  
 // ── LOAD DRIVER LOCATIONS ─────────────────────────────────────
-async function loadDriverLocations(activeDeliveries) {
-    // 1. Fetch the drivers FIRST
+async function loadDriverLocations() {
+    // 1. Fetch drivers from API (Laravel Controller filtered to subMinutes(2))
     const drivers = await API.get('/drivers/locations');
     const driverList = document.getElementById('driver-list');
     const badge = document.querySelector('.tracking-badge');
 
     if (!drivers || !trackingMap) return;
 
-    // 2. 🟢 GHOST CLEANUP: Remove drivers from map if they aren't in the server response
-    // This ensures Jade Amora vanishes if he hasn't updated his location recently.
+    // 2. 🟢 GHOST CLEANUP: Remove drivers who stop pinging
     const serverIds = drivers.map(d => d.id.toString());
     Object.keys(driverMarkers).forEach(id => {
         if (!serverIds.includes(id)) {
-            trackingMap.removeLayer(driverMarkers[id]); // Remove from map
-            delete driverMarkers[id]; // Remove from memory
+            trackingMap.removeLayer(driverMarkers[id]); // Wipe icon from map
+            delete driverMarkers[id]; // Wipe from memory
         }
     });
 
-    // 3. Update the "Live" badge at the top
+    // 3. Update the "Live" badge status
     if (badge) {
         if (drivers.length > 0) {
             badge.style.display = 'flex';
@@ -1762,7 +1666,7 @@ async function loadDriverLocations(activeDeliveries) {
         }
     }
 
-    // 4. Handle Empty State
+    // 4. Handle Empty List UI
     if (drivers.length === 0) {
         if (driverList) {
             driverList.innerHTML = `<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No drivers currently active</div>`;
@@ -1776,6 +1680,7 @@ async function loadDriverLocations(activeDeliveries) {
         const lng = parseFloat(driver.current_lng);
         if (!lat || !lng) return;
 
+        // Visual offset for multiple drivers in same area
         const offsetLat = lat + (index * 0.0002);
         const offsetLng = lng + (index * 0.0002);
 
@@ -1797,49 +1702,36 @@ async function loadDriverLocations(activeDeliveries) {
                                 animation:pulse-green 1.5s infinite;opacity:0.5">
                     </div>
                 </div>`,
-            iconSize: [20, 20],
-            iconAnchor: [10, 10],
-            className: ''
+            iconSize: [20, 20], iconAnchor: [10, 10], className: ''
         });
 
-        const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Last Update: ${timeText}</small>`;
+        const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Updated: ${timeText}</small>`;
 
         if (driverMarkers[driver.id]) {
-            // Smoothly slide the existing marker
-            driverMarkers[driver.id]
-                .setLatLng([offsetLat, offsetLng])
-                .setPopupContent(popupContent);
+            // Smoothly move the icon if already exists
+            driverMarkers[driver.id].setLatLng([offsetLat, offsetLng]).setPopupContent(popupContent);
         } else {
-            // Create brand new marker
+            // Place a new icon
             driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
-                .addTo(trackingMap)
-                .bindPopup(popupContent);
+                .addTo(trackingMap).bindPopup(popupContent);
         }
     });
 
-    // 6. Update the Driver Info List below the map
+    // 6. Update Driver List below the map
     if (driverList) {
-        driverList.innerHTML = drivers.map(d => {
-            let timeText = 'Just now';
-            if (d.location_updated_at) {
-                const updated = new Date(d.location_updated_at);
-                if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
-            }
-            return `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border-radius:10px">
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <div class="pulse-dot"></div>
-                        <div>
-                            <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
-                            <div style="font-size:11px;color:var(--text3)">📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)} · Updated: ${timeText}</div>
-                        </div>
+        driverList.innerHTML = drivers.map(d => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border-radius:10px">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <div class="pulse-dot"></div>
+                    <div>
+                        <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
+                        <div style="font-size:11px;color:var(--text3)">📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}</div>
                     </div>
-                    <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">🎯 Focus</button>
-                </div>`;
-        }).join('');
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="centerOnDriver(${d.current_lat}, ${d.current_lng}, '${d.name}')">🎯 Focus</button>
+            </div>`).join('');
     }
 }
-
 // ---- MAINTENANCE ----
 pages.maintenance = async function () {
   showLoading();
