@@ -245,7 +245,9 @@ pages.dashboard = async function () {
   // --- UPDATED LOGIC FOR MULTI-UNIT INVENTORY ---
   // We use .reduce to sum up all units across all equipment types
   const totalUnitsCount = equipList.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
-  const totalAvailCount = equipList.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
+  const totalAvailCount = equipList
+    .filter(e => e.status !== 'maintenance')
+    .reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
   
   // For the status bars, we still need the count of reserved and maintenance units
   const reservedCount = equipList.reduce((sum, e) => {
@@ -393,17 +395,15 @@ pages.equipment = async function (filter = 'all') {
 
   // ─── 1. TAB HEADER CALCULATIONS ───
   
-  // All Units: Sum of all units that are NOT in maintenance (e.g., 7)
-  const allCount = equipment
-      .filter(e => e.status !== 'maintenance')
-      .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+  // All Units: Counts every single unit in the DB (Total = 8)
+  const allCount = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
 
-  // Available: Sum of available stock for items NOT in maintenance
+  // Available: ONLY count units for items that are NOT in maintenance (Total = 7)
   const availCount = equipment
       .filter(e => e.status !== 'maintenance')
       .reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
   
-  // Reserved: Units currently out with farmers (Total - Available)
+  // Reserved: Count units currently rented out (Total - Available)
   const resCount = equipment
       .filter(e => e.status !== 'maintenance')
       .reduce((sum, e) => {
@@ -411,29 +411,28 @@ pages.equipment = async function (filter = 'all') {
           return sum + Math.max(0, unitsOut);
       }, 0);
 
-  // In Shop: Total units for equipment marked as maintenance
+  // In Shop: Strictly counting units of equipment marked 'maintenance'
   const maintCount = equipment
       .filter(e => e.status === 'maintenance')
       .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
 
   // ─── 2. FILTERING LOGIC ───
-  
   if (filter === 'all') {
-      // 🟢 Shows all gear except the broken stuff
-      list = list.filter(e => e.status !== 'maintenance');
+      // 🟢 Show everything (8 cards)
+      list = [...equipment];
   } 
   else if (filter === 'available') {
-      // 🟢 Item stays here as long as at least 1 unit is left and it's not broken
+      // 🟢 RULE: Show if Stock > 0 AND Not in Maintenance (7 cards)
       list = list.filter(e => parseInt(e.available_quantity) > 0 && e.status !== 'maintenance');
   } 
   else if (filter === 'reserved') {
-      // 🟢 Item only moves here when stock is exactly 0
+      // Show gear that is fully booked (0 stock) but functional
       list = list.filter(e => parseInt(e.available_quantity) === 0 && e.status !== 'maintenance');
   } 
   else if (filter === 'maintenance') {
       list = list.filter(e => e.status === 'maintenance');
   }
-  
+
   document.getElementById('content').innerHTML = `
     <div class="page-header">
       <div><div class="page-heading">Equipment</div><div class="page-sub">Manage all farm equipment inventory</div></div>
