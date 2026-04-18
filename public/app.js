@@ -392,7 +392,8 @@ pages.equipment = async function (filter = 'all') {
   let list = [...equipment];
 
   // ─── 1. TAB HEADER CALCULATIONS ───
-  const allCount   = equipment.reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+  const allCount = equipment.filter(e => e.status !== 'maintenance')
+                          .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
   const availCount = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
   
   // Logic: Sum of units currently in farmer hands (excludes units in repair)
@@ -407,11 +408,14 @@ pages.equipment = async function (filter = 'all') {
   const maintCount = equipment.reduce((sum, e) => e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum, 0);
 
   // ─── 2. FILTERING LOGIC (The "Disappearing" Trick) ───
-  if (filter === 'available') {
+  if (filter === 'all') {
+      // 🟢 Add this: This hides the 1 maintenance item from the 'All' tab
+      list = list.filter(e => e.status !== 'maintenance');
+  } 
+  else if (filter === 'available') {
       list = list.filter(e => e.available_quantity > 0 && e.status !== 'maintenance');
   } 
   else if (filter === 'reserved') {
-      // 🟢 Item DISAPPEARS if unitsOut is 0
       list = list.filter(e => {
           const unitsOut = parseInt(e.quantity) - parseInt(e.available_quantity);
           return unitsOut > 0 && e.status !== 'maintenance';
