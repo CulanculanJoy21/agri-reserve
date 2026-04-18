@@ -392,39 +392,48 @@ pages.equipment = async function (filter = 'all') {
   let list = [...equipment];
 
   // ─── 1. TAB HEADER CALCULATIONS ───
-  const allCount = equipment.filter(e => e.status !== 'maintenance')
-                          .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
-  const availCount = equipment.reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
   
-  // Logic: Sum of units currently in farmer hands (excludes units in repair)
-  const resCount   = equipment.reduce((sum, e) => {
-      if (e.status !== 'maintenance') {
+  // All Units: Sum of all units that are NOT in maintenance (e.g., 7)
+  const allCount = equipment
+      .filter(e => e.status !== 'maintenance')
+      .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
+
+  // Available: Sum of available stock for items NOT in maintenance
+  const availCount = equipment
+      .filter(e => e.status !== 'maintenance')
+      .reduce((sum, e) => sum + (parseInt(e.available_quantity) || 0), 0);
+  
+  // Reserved: Units currently out with farmers (Total - Available)
+  const resCount = equipment
+      .filter(e => e.status !== 'maintenance')
+      .reduce((sum, e) => {
           const unitsOut = (parseInt(e.quantity) || 0) - (parseInt(e.available_quantity) || 0);
           return sum + Math.max(0, unitsOut);
-      }
-      return sum;
-  }, 0);
+      }, 0);
 
-  const maintCount = equipment.reduce((sum, e) => e.status === 'maintenance' ? sum + (parseInt(e.quantity) || 0) : sum, 0);
+  // In Shop: Total units for equipment marked as maintenance
+  const maintCount = equipment
+      .filter(e => e.status === 'maintenance')
+      .reduce((sum, e) => sum + (parseInt(e.quantity) || 0), 0);
 
-  // ─── 2. FILTERING LOGIC (The "Disappearing" Trick) ───
+  // ─── 2. FILTERING LOGIC ───
+  
   if (filter === 'all') {
-      // 🟢 Add this: This hides the 1 maintenance item from the 'All' tab
+      // 🟢 Shows all gear except the broken stuff
       list = list.filter(e => e.status !== 'maintenance');
   } 
   else if (filter === 'available') {
-      list = list.filter(e => e.available_quantity > 0 && e.status !== 'maintenance');
+      // 🟢 Item stays here as long as at least 1 unit is left and it's not broken
+      list = list.filter(e => parseInt(e.available_quantity) > 0 && e.status !== 'maintenance');
   } 
   else if (filter === 'reserved') {
-      list = list.filter(e => {
-          const unitsOut = parseInt(e.quantity) - parseInt(e.available_quantity);
-          return unitsOut > 0 && e.status !== 'maintenance';
-      });
+      // 🟢 Item only moves here when stock is exactly 0
+      list = list.filter(e => parseInt(e.available_quantity) === 0 && e.status !== 'maintenance');
   } 
   else if (filter === 'maintenance') {
       list = list.filter(e => e.status === 'maintenance');
   }
-
+  
   document.getElementById('content').innerHTML = `
     <div class="page-header">
       <div><div class="page-heading">Equipment</div><div class="page-sub">Manage all farm equipment inventory</div></div>
