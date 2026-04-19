@@ -89,8 +89,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/farmer/dashboard', [UserController::class, 'farmerDashboard']);
 
     // Driver location tracking
-    Route::post('/driver/update-location', [UserController::class, 'updateLocation']);
-    Route::get('/drivers/locations', [UserController::class, 'getActiveDriverLocations']);
+    
+    Route::put('/drivers/{id}/location', [UserController::class, 'updateLocation']);
+    Route::get('/drivers/locations',     [UserController::class, 'getActiveDriverLocations']);
     
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {

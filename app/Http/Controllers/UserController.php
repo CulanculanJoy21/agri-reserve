@@ -74,26 +74,33 @@ class UserController extends Controller
     }
 
     // Driver updates their own location
-    public function updateLocation(Request $request)
+   public function updateLocation(Request $request, $id)
     {
         $request->validate([
             'latitude'  => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);
-
-        $request->user()->update([
+    
+        $user = \App\Models\User::findOrFail($id);
+        $user->update([
             'current_lat'         => $request->latitude,
             'current_lng'         => $request->longitude,
             'location_updated_at' => now(),
         ]);
-
-        return response()->json(['status' => 'success']);
+    
+        return response()->json(['message' => 'Location updated', 'status' => 'success']);
     }
-
-    public function getActiveDriverLocations() {
-    return User::where('role', 'driver')
-        ->where('location_updated_at', '>=', now()->subSeconds(30)) // 🟢 Strict 30-second window
-        ->get();
+    
+    // GET /drivers/locations
+    public function getActiveDriverLocations()
+    {
+        return response()->json(
+            \App\Models\User::where('role', 'driver')
+                ->whereNotNull('current_lat')
+                ->whereNotNull('current_lng')
+                ->where('location_updated_at', '>=', now()->subMinutes(30))
+                ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
+        );
     }
     // 🟢 FULL Dashboard Method (Fixed ₱0.00 and Quantity)
     public function farmerDashboard(Request $request)
