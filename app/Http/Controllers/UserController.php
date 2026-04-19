@@ -98,6 +98,8 @@ class UserController extends Controller
             \App\Models\User::where('role', 'driver')
                 ->whereNotNull('current_lat')
                 ->whereNotNull('current_lng')
+                ->where('current_lat', '!=', 0)
+                ->where('current_lng', '!=', 0)
                 ->where('location_updated_at', '>=', now()->subMinutes(30))
                 ->get(['id', 'name', 'current_lat', 'current_lng', 'location_updated_at'])
         );

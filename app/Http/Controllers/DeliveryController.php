@@ -112,7 +112,15 @@ class DeliveryController extends Controller
             if ($res) {
                 $res->update(['status' => 'assigned']);
             }
-        } 
+            // ✅ Clear driver location — removes pin from map immediately
+            if ($delivery->driver_id) {
+                \App\Models\User::where('id', $delivery->driver_id)->update([
+                    'current_lat'         => null,
+                    'current_lng'         => null,
+                    'location_updated_at' => null,
+                ]);
+            }
+        }
         elseif ($newDeliveryStatus === 'shipping' || $newDeliveryStatus === 'in_transit') {
             // 🟢 CHANGE: Push 'in_transit' to the reservation
             // This allows the Farmer app to show the "In Transit" badge
