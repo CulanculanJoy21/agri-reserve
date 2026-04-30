@@ -1738,41 +1738,48 @@ function initTrackingMap(activeDeliveries) {
 async function loadDriverLocations() {
   const drivers    = await API.get('/drivers/locations');
   const driverList = document.getElementById('driver-list');
- 
-  if (!drivers || !trackingMap) return;
- 
-  // Remove drivers who went offline
-  const serverIds = drivers.map(d => String(d.id));
-  Object.keys(driverMarkers).forEach(id => {
-    if (!serverIds.includes(id)) {
-      trackingMap.removeLayer(driverMarkers[id]);
-      delete driverMarkers[id];
+
+  if (!trackingMap) return;
+
+  // Use empty array if null returned
+  const activeDrivers = drivers || [];
+
+  // ✅ CLEANUP — always runs, removes offline drivers
+  // Keys from driverMarkers are strings, ids from server are numbers
+  // Convert both to string for safe comparison
+  const serverIds = activeDrivers.map(d => String(d.id));
+  Object.keys(driverMarkers).forEach(markerId => {
+    if (!serverIds.includes(String(markerId))) {
+      trackingMap.removeLayer(driverMarkers[markerId]);
+      delete driverMarkers[markerId];
+      console.log('Removed offline driver marker:', markerId);
     }
   });
- 
-  if (drivers.length === 0) {
+
+  // Update driver list UI
+  if (activeDrivers.length === 0) {
     if (driverList) driverList.innerHTML = `
       <div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">
         No drivers currently active
       </div>`;
     return;
   }
- 
-  drivers.forEach((driver, index) => {
+
+  // Add or update markers for active drivers
+  activeDrivers.forEach((driver, index) => {
     const lat = parseFloat(driver.current_lat);
     const lng = parseFloat(driver.current_lng);
-    if (!lat || !lng) return;
- 
-    // Slight offset so overlapping drivers don't hide each other
+    if (!lat || !lng || lat === 0 || lng === 0) return;
+
     const offsetLat = lat + (index * 0.0002);
     const offsetLng = lng + (index * 0.0002);
- 
+
     let timeText = 'Just now';
     if (driver.location_updated_at) {
       const updated = new Date(driver.location_updated_at);
       if (!isNaN(updated.getTime())) timeText = updated.toLocaleTimeString();
     }
- 
+
     const driverIcon = L.divIcon({
       html: `
         <div style="position:relative;width:20px;height:20px">
@@ -1789,22 +1796,23 @@ async function loadDriverLocations() {
       iconAnchor: [10, 10],
       className: ''
     });
- 
+
     const popupContent = `<strong>🚗 ${driver.name}</strong><br><small>Updated: ${timeText}</small>`;
- 
-    if (driverMarkers[driver.id]) {
-      driverMarkers[driver.id]
+    const markerKey = String(driver.id);
+
+    if (driverMarkers[markerKey]) {
+      driverMarkers[markerKey]
         .setLatLng([offsetLat, offsetLng])
         .setPopupContent(popupContent);
     } else {
-      driverMarkers[driver.id] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
+      driverMarkers[markerKey] = L.marker([offsetLat, offsetLng], { icon: driverIcon })
         .addTo(trackingMap)
         .bindPopup(popupContent);
     }
   });
- 
+
   if (driverList) {
-    driverList.innerHTML = drivers.map(d => {
+    driverList.innerHTML = activeDrivers.map(d => {
       let timeText = 'Just now';
       if (d.location_updated_at) {
         const t = new Date(d.location_updated_at);
@@ -1818,7 +1826,8 @@ async function loadDriverLocations() {
             <div>
               <div style="font-weight:600;color:var(--text1);font-size:14px">${d.name}</div>
               <div style="font-size:11px;color:var(--text3)">
-                📍 ${parseFloat(d.current_lat).toFixed(5)}, ${parseFloat(d.current_lng).toFixed(5)}
+                📍 ${parseFloat(d.current_lat).toFixed(5)},
+                   ${parseFloat(d.current_lng).toFixed(5)}
                 · ${timeText}
               </div>
             </div>
@@ -1831,42 +1840,6 @@ async function loadDriverLocations() {
     }).join('');
   }
 }
-window.centerOnDriver = function(lat, lng, name) {
-  if (!lat || !lng || !trackingMap) {
-    showToast(`No GPS data for ${name}`, 'error');
-    return;
-  }
-  trackingMap.flyTo([parseFloat(lat), parseFloat(lng)], 16, {
-    animate: true,
-    duration: 1.5
-  });
-  showToast(`Focused on ${name} 🎯`);
-};
- 
-window.refreshDriverLocations = async function() {
-  showToast('Syncing live GPS data...', 'info');
-  await loadDriverLocations();
-  showToast('Driver locations refreshed ✓');
-};
-
-// 3. Status Update Handler for the Table
-window.updateDeliveryStatus = async function(deliveryId, newStatus) {
-    const confirmMsg = `Are you sure you want to mark Delivery #D${deliveryId} as ${newStatus.toUpperCase()}?`;
-    if (!confirm(confirmMsg)) return;
-
-    // 🟢 CHANGED: Use .put() instead of .post()
-    // 🟢 CHANGED: URL is now just /deliveries/${deliveryId}
-    const result = await API.put(`/deliveries/${deliveryId}`, {
-        delivery_status: newStatus // 🟢 CHANGED: key must be 'delivery_status' to match your DB
-    });
-
-    if (result && !result.message) {
-        showToast('Delivery status updated successfully', 'success');
-        pages.deliveries(); 
-    } else {
-        showToast(result?.message || 'Failed to update status', 'error');
-    }
-};
 // ---- MAINTENANCE ----
 pages.maintenance = async function () {
   showLoading();
