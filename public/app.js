@@ -5,7 +5,7 @@
 
 // ==================== API CONFIG ====================
 const API = {
-  BASE_URL: 'https://agri-reserve-main-cmvorm.free.laravel.cloud/api',
+  BASE_URL: 'https://agri-reserve-production.up.railway.app/api',
   TOKEN: localStorage.getItem('auth_token') || null,
 
   headers() {
