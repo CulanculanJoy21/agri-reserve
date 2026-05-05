@@ -2573,7 +2573,7 @@ async function doLogin() {
     document.getElementById('login-error').textContent = 'Please enter email and password';
     return;
   }
-  const res = await fetch('https://agri-reserve-main-cmvorm.free.laravel.cloud/api/auth/login', {
+  const res = await fetch('https://agri-reserve-production.up.railway.app/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
