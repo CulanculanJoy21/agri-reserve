@@ -6,12 +6,20 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Step 2: Set up the PHP environment with Apache
+# Step 2: Use an official Composer image to handle PHP dependencies safely
+FROM composer:2 AS vendor-builder
+WORKDIR /app
+COPY composer*.json ./
+# Running with --ignore-platform-reqs ensures extensions don't block the build stage
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
+
+# Copy the rest of the application files and optimize autoloading
+COPY . .
+RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+
+# Step 3: Build the final production runtime container
 FROM php:8.3-apache
 RUN docker-php-ext-install pdo pdo_mysql
-
-# Install Composer inside the container
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Enable Apache mod_rewrite for Laravel routing
 RUN a2enmod rewrite
@@ -19,17 +27,16 @@ ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 
-# Copy project files
 WORKDIR /var/www/html
+
+# Copy core files
 COPY . .
 
-# Copy the built frontend assets from Step 1
+# Inject the completed vendor folder from Step 2 and the Vite assets from Step 1
+COPY --from=vendor-builder /app/vendor ./vendor
 COPY --from=frontend-builder /app/public/build ./public/build
 
-# Install production PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Set permissions for Laravel
+# Ensure proper Laravel storage & cache ownership
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
