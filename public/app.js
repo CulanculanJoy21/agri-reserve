@@ -1,5 +1,5 @@
 const API = {
-  BASE_URL: '/api',
+  BASE_URL: 'https://agri-reserve.onrender.com/api',
   TOKEN: localStorage.getItem('auth_token') || null,
 
   headers() {

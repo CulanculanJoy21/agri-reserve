@@ -13,64 +13,76 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // ── Admin ──────────────────────────────────────────────
-        User::create([
-            'name'      => 'Administrator',
-            'email'     => 'admin@agricoop.ph',
-            'password'  => Hash::make('admin123'),
-            'role'      => 'admin',
-            'phone'     => '088-123-4567',
-            'address'   => 'AgriCoop Office, Cagayan de Oro City',
-            'is_active' => true,
-        ]);
+        User::updateOrCreate(
+            ['email' => 'admin@agricoop.ph'],
+            [
+                'name'      => 'Administrator',
+                'password'  => Hash::make('admin123'),
+                'role'      => 'admin',
+                'phone'     => '088-123-4567',
+                'address'   => 'AgriCoop Office, Cagayan de Oro City',
+                'is_active' => true,
+            ]
+        );
 
         // ── Farmers ────────────────────────────────────────────
-        User::create([
-            'name'      => 'Juan dela Cruz',
-            'email'     => 'juan@farmer.com',
-            'password'  => Hash::make('farmer123'),
-            'role'      => 'farmer',
-            'phone'     => '09171234567',
-            'address'   => 'Brgy. Bagong Silang, Bukidnon',
-            'is_active' => true,
-        ]);
-        User::create([
-            'name'      => 'Maria Santos',
-            'email'     => 'maria@farmer.com',
-            'password'  => Hash::make('farmer123'),
-            'role'      => 'farmer',
-            'phone'     => '09181234567',
-            'address'   => 'Brgy. Calaanan, Cagayan de Oro',
-            'is_active' => true,
-        ]);
-        User::create([
-            'name'      => 'Pedro Reyes',
-            'email'     => 'pedro@farmer.com',
-            'password'  => Hash::make('farmer123'),
-            'role'      => 'farmer',
-            'phone'     => '09191234567',
-            'address'   => 'Brgy. Indahag, Cagayan de Oro',
-            'is_active' => true,
-        ]);
+        User::updateOrCreate(
+            ['email' => 'juan@farmer.com'],
+            [
+                'name'      => 'Juan dela Cruz',
+                'password'  => Hash::make('farmer123'),
+                'role'      => 'farmer',
+                'phone'     => '09171234567',
+                'address'   => 'Brgy. Bagong Silang, Bukidnon',
+                'is_active' => true,
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'maria@farmer.com'],
+            [
+                'name'      => 'Maria Santos',
+                'password'  => Hash::make('farmer123'),
+                'role'      => 'farmer',
+                'phone'     => '09181234567',
+                'address'   => 'Brgy. Calaanan, Cagayan de Oro',
+                'is_active' => true,
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'pedro@farmer.com'],
+            [
+                'name'      => 'Pedro Reyes',
+                'password'  => Hash::make('farmer123'),
+                'role'      => 'farmer',
+                'phone'     => '09191234567',
+                'address'   => 'Brgy. Indahag, Cagayan de Oro',
+                'is_active' => true,
+            ]
+        );
 
         // ── Drivers ────────────────────────────────────────────
-        User::create([
-            'name'      => 'Lito Aguilar',
-            'email'     => 'lito@driver.com',
-            'password'  => Hash::make('driver123'),
-            'role'      => 'driver',
-            'phone'     => '09201234567',
-            'address'   => 'Cagayan de Oro City',
-            'is_active' => true,
-        ]);
-        User::create([
-            'name'      => 'Rodel Mendez',
-            'email'     => 'rodel@driver.com',
-            'password'  => Hash::make('driver123'),
-            'role'      => 'driver',
-            'phone'     => '09211234567',
-            'address'   => 'Cagayan de Oro City',
-            'is_active' => true,
-        ]);
+        User::updateOrCreate(
+            ['email' => 'lito@driver.com'],
+            [
+                'name'      => 'Lito Aguilar',
+                'password'  => Hash::make('driver123'),
+                'role'      => 'driver',
+                'phone'     => '09201234567',
+                'address'   => 'Cagayan de Oro City',
+                'is_active' => true,
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'rodel@driver.com'],
+            [
+                'name'      => 'Rodel Mendez',
+                'password'  => Hash::make('driver123'),
+                'role'      => 'driver',
+                'phone'     => '09211234567',
+                'address'   => 'Cagayan de Oro City',
+                'is_active' => true,
+            ]
+        );
 
         // ── Equipment ──────────────────────────────────────────
         $equipment = [
@@ -84,7 +96,9 @@ class DatabaseSeeder extends Seeder
             ['equipment_name' => 'Farm Trailer 3T',        'category' => 'Trailer',     'rental_price' => 600,  'status' => 'available',    'location' => 'Main Shed A',  'description' => '3-ton capacity farm utility trailer'],
         ];
 
-        foreach ($equipment as $e) Equipment::create($e);
+        foreach ($equipment as $e) {
+            Equipment::updateOrCreate(['equipment_name' => $e['equipment_name']], $e);
+        }
 
         // ── Default Settings ───────────────────────────────────
         $settings = [
