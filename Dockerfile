@@ -10,7 +10,6 @@ RUN npm run build
 FROM composer:2 AS vendor-builder
 WORKDIR /app
 COPY composer*.json ./
-# Running with --ignore-platform-reqs ensures extensions don't block the build stage
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
 
 # Copy the rest of the application files and optimize autoloading
@@ -40,3 +39,6 @@ COPY --from=frontend-builder /app/public/build ./public/build
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
+
+# Run migrations automatically on startup before booting Apache
+CMD php artisan migrate --force && apache2-foreground
