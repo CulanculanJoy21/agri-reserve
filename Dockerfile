@@ -10,16 +10,24 @@ RUN npm run build
 FROM php:8.3-apache
 RUN docker-php-ext-install pdo pdo_mysql
 
+# Install Composer inside the container
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 # Enable Apache mod_rewrite for Laravel routing
 RUN a2enmod rewrite
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 
-# Copy project files from local and built assets from Step 1
+# Copy project files
 WORKDIR /var/www/html
 COPY . .
+
+# Copy the built frontend assets from Step 1
 COPY --from=frontend-builder /app/public/build ./public/build
+
+# Install production PHP dependencies
+RUN composer install --no-dev --optimize-autoloader
 
 # Set permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
