@@ -1,11 +1,5 @@
-/* ============================================================
-   AgriReserve — Farm Equipment Management System
-   app.js | Full frontend — 100% Live API, no mock data
-   ============================================================ */
-
-// ==================== API CONFIG ====================
 const API = {
-  BASE_URL: 'https://agri-reserve-production.up.railway.app/api',
+  BASE_URL: '/api',
   TOKEN: localStorage.getItem('auth_token') || null,
 
   headers() {
@@ -2573,7 +2567,7 @@ async function doLogin() {
     document.getElementById('login-error').textContent = 'Please enter email and password';
     return;
   }
-  const res = await fetch('https://agri-reserve-production.up.railway.app/api/auth/login', {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
