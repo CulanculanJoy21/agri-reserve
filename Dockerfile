@@ -1,4 +1,4 @@
-Dockerfile# Step 1: Use a Node image to compile the Vite assets
+# Step 1: Use a Node image to compile the Vite assets
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY package*.json ./
