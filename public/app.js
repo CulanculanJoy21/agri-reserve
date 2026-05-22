@@ -2196,7 +2196,10 @@ pages.feedback = async function () {
 // ---- REPORTS ----
 pages.reports = async function () {
   showLoading();
-  const full = await API.get('/reports/full') || {};
+  
+  // Append a unique timestamp parameter to completely bypass old local browser caches
+  const full = await API.get(`/reports/full?_t=${Date.now()}`) || {};
+  
   document.getElementById('content').innerHTML = `
     <div class="page-header">
       <div><div class="page-heading">Reports</div><div class="page-sub">System analytics and summaries</div></div>
@@ -2219,7 +2222,7 @@ pages.reports = async function () {
 };
 
 async function showReportEquipUsage() {
-  const data = await API.get('/reports/equipment-usage') || [];
+  const data = await API.get(`/reports/equipment-usage?_t=${Date.now()}`) || [];
   openModal('Equipment Usage Report', `
     <div class="table-wrap"><table>
       <thead><tr><th>Equipment</th><th>Category</th><th>Reservations</th><th>Status</th><th>Rate</th></tr></thead>
@@ -2238,7 +2241,7 @@ async function showReportEquipUsage() {
 }
 
 async function showReportReservations() {
-  const data     = await API.get('/reports/reservations') || {};
+  const data = await API.get(`/reports/reservations?_t=${Date.now()}`) || {};
   const byStatus = data.by_status || [];
   const byType   = data.by_type   || [];
   openModal('Reservation Summary', `
@@ -2255,7 +2258,7 @@ async function showReportReservations() {
 }
 
 async function showReportDelivery() {
-  const data       = await API.get('/reports/deliveries') || {};
+  const data = await API.get(`/reports/deliveries?_t=${Date.now()}`) || {};
   const deliveries = data.deliveries || [];
   openModal('Delivery Report', `
     <div class="table-wrap"><table>
@@ -2280,7 +2283,7 @@ async function showReportDelivery() {
 }
 
 async function showReportMaint() {
-  const data    = await API.get('/reports/maintenance') || {};
+  const data = await API.get(`/reports/maintenance?_t=${Date.now()}`) || {};
   const records = data.records || [];
   openModal('Maintenance Cost Report', `
     <div class="table-wrap"><table>
@@ -2303,7 +2306,7 @@ async function showReportMaint() {
 }
 
 async function showReportFarmer() {
-  const farmers = await API.get('/reports/farmers') || [];
+  const farmers = await API.get(`/reports/farmers?_t=${Date.now()}`) || [];
   openModal('Farmer Activity Report', `
     <div class="table-wrap"><table>
       <thead><tr><th>Farmer</th><th>Phone</th><th>Reservations</th><th>Joined</th></tr></thead>
